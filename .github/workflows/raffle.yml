@@ -10,10 +10,12 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Setup Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
 
       - name: Install ethier
-        uses: go install github.com/divergencetech/ethier/ethier@latest
+        run: go install github.com/divergencetech/ethier/ethier@latest
 
       - name: Run
-        run: ./raffle.sh
+        run: |
+          export PATH=${PATH}:`go env GOPATH`/bin
+          ./raffle.sh
