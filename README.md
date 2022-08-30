@@ -15,7 +15,7 @@ You can either reproduce the raffles yourself on your local machine or have a lo
 ### Install dependencies
 
 ```bash
-go install github.com/divergencetech/ethier/ethier@latest
+go install github.com/divergencetech/ethier/ethier@v0.35.3
 ```
 
 ### Run the script
