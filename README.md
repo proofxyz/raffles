@@ -1,6 +1,6 @@
 # Proof raffles
 
-This public repository contains all the necessary data to reproduce the raffles conducted by PROOF.
+This public repository contains all necessary data to reproduce the raffles conducted by PROOF.
 All raffles are hence verifiable by anyone.
 
 ## Structure
@@ -10,7 +10,7 @@ The entropy is derived from an upcoming block that was announced in advance, ren
 
 ## Reproducing raffles
 
-You can either reproduce the raffles yourself on your local machine or have a look out the outputs of our [CI](https://github.com/proofxyz/raffles/actions/workflows/raffle.yml).
+You can either reproduce the raffles yourself on your local machine or have a look at the output of our [CI](https://github.com/proofxyz/raffles/actions/workflows/raffle.yml).
 
 ### Install dependencies
 
