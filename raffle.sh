@@ -26,3 +26,4 @@ draw grails/season-03/holder-snapshot-grail-8 1
 draw external/defybirds-pwc/participants 1535
 draw defybirds-unnested/participants 185
 draw beeple-nyc/participants $(< beeple-nyc/participants wc -l) # `wc -l` assumes a blank line at the end
+draw growth/participants 1000
