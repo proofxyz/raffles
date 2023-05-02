@@ -1,44 +1,27 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"math/rand"
-	"time"
 
 	_ "embed"
-
-	"github.com/ccssmnn/hego"
 )
 
 //go:embed submissions.json
 var raw []byte
 
 func main() {
-	// submissions := [][]int{
-	// 	{1, 1},
-	// 	{2, 2, 2, 3, 3},
-	// 	{3, 3, 4, 4},
-	// 	{4, 4, 1, 1},
-	// 	{1, 2, 3, 4, 0},
-	// 	{7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7},
-	// 	{1},
-	// 	{1},
-	// 	{1},
-	// 	{1},
-	// 	{1},
-	// 	{1},
-	// 	{1},
-	// 	{1},
-	// 	{1},
-	// 	{1},
-	// 	{1},
-	// 	{1},
-	// 	{1},
-	// }
+	submissions := [][]int{
+		{1, 1},
+		{2, 2, 2, 3, 3},
+		{3, 3, 4, 4},
+		{4, 4, 1, 1},
+		{1, 2, 3, 4, 0},
+		// {7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7},
+		// {7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7},
+	}
 
-	var submissions [][]int
-	json.Unmarshal(raw, &submissions)
+	// var submissions [][]int
+	// json.Unmarshal(raw, &submissions)
 
 	// rand.New(rand.NewSource(time.Now().UnixNano())).Shuffle(len(submissions), func(i, j int) {
 	// 	submissions[i], submissions[j] = submissions[j], submissions[i]
@@ -49,44 +32,40 @@ func main() {
 		initialAllocs = append(initialAllocs, newAllocationFromSubmission(s))
 	}
 
-	s := state{
-		initial: initialAllocs,
-		current: initialAllocs,
-		src:     rand.NewSource(time.Now().UnixNano()),
-	}
-
+	s := newState(initialAllocs)
 	fmt.Println(s.score())
 
-	var pool allocation
-	for _, a := range s.current {
-		pool = *pool.add(a)
-	}
-	fmt.Println(pool)
+	// var pool allocation
+	// for _, a := range s.current {
+	// 	pool = *pool.add(a)
+	// }
+	// fmt.Println(pool)
 
-	var rel [numProjects]float64
-	for i, x := range pool {
-		rel[i] = float64(x) / float64(pool.sum())
-	}
-	fmt.Println(rel)
+	// var rel [numProjects]float64
+	// for i, x := range pool {
+	// 	rel[i] = float64(x) / float64(pool.sum())
+	// }
+	// fmt.Println(rel)
 
-	settings := hego.SASettings{
-		Settings: hego.Settings{
-			MaxIterations: 2500000,
-			Verbose:       100000,
-			KeepHistory:   false,
-		},
-		Temperature: 10,
-		// Temperature:     s.Energy() / float64(s.numAllocations()),
-		AnnealingFactor: 0.999998,
-	}
+	// settings := hego.SASettings{
+	// 	Settings: hego.Settings{
+	// 		MaxIterations: 2500000,
+	// 		Verbose:       100000,
+	// 		KeepHistory:   false,
+	// 	},
+	// 	Temperature: 10,
+	// 	// Temperature:     s.Energy() / float64(s.numAllocations()),
+	// 	AnnealingFactor: 0.999998,
+	// }
 
 	// start simulated annealing algorithm
-	result, err := hego.SA(s, settings)
+	// result, err := hego.SA(s, settings)
 
+	finalState, result, err := s.anneal(0.99998, true)
 	if err != nil {
 		fmt.Printf("Got error while running Anneal: %v", err)
 	}
-	finalState := result.State.(state)
+
 	finalEnergy := result.Energy
 	fmt.Printf("Finished Simulated Annealing in %v! Value: %v \n", result.Runtime, finalEnergy)
 
@@ -106,6 +85,7 @@ func main() {
 	// finalState := s
 
 	for i, x := range finalState.current {
+		fmt.Println(finalState.initial[i].numPerProject(), x.numPerProject())
 		fmt.Println(finalState.initial[i], x)
 	}
 

@@ -10,6 +10,9 @@ require (
 )
 
 require (
+	github.com/chzyer/readline v1.5.1 // indirect
+	github.com/google/pprof v0.0.0-20230429030804-905365eefe3e // indirect
+	github.com/ianlancetaylor/demangle v0.0.0-20230425220036-24673e7931eb // indirect
 	golang.org/x/crypto v0.1.0 // indirect
-	golang.org/x/sys v0.6.0 // indirect
+	golang.org/x/sys v0.7.0 // indirect
 )

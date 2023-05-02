@@ -1,156 +1,62 @@
 package main
 
 import (
+	"math"
 	"math/rand"
+	"time"
 
 	"github.com/ccssmnn/hego"
 )
 
-const numProjects = 21
-
-type (
-	allocation [numProjects]int
-)
-
-func newAllocationFromSubmission(xs []int) *allocation {
-	var b allocation
-	for _, x := range xs {
-		b[x]++
-	}
-	return &b
-}
-
-func newAllocationFromPartial(xs []int) *allocation {
-	var b allocation
-	for i, x := range xs {
-		b[i] = x
-	}
-	return &b
-}
-
-func (a *allocation) smul(b *allocation) int {
-	var res int
-	for i := range a {
-		res += a[i] * b[i]
-	}
-	return res
-}
-
-func (a *allocation) mul(b *allocation) *allocation {
-	var res allocation
-	for i := range a {
-		res[i] = a[i] * b[i]
-	}
-	return &res
-}
-
-func (a *allocation) add(b *allocation) *allocation {
-	var res allocation
-	for i := range a {
-		res[i] = a[i] + b[i]
-	}
-	return &res
-}
-
-func (a *allocation) sub(b *allocation) *allocation {
-	var res allocation
-	for i := range a {
-		res[i] = a[i] - b[i]
-	}
-	return &res
-}
-
-func (b *allocation) sum() int {
-	var s int
-	for _, x := range b {
-		s += x
-	}
-	return s
-}
-
-func (b *allocation) copy() *allocation {
-	var c allocation
-	copy(c[:], b[:])
-	return &c
-}
-
-func (b *allocation) variablility() float64 {
-	return float64(b.numDistinct()) / float64(b.sum())
-}
-
-func (b *allocation) numDistinct() int {
-	var n int
-	for _, x := range b {
-		if x > 0 {
-			n++
-		}
-	}
-	return n
-}
-
-func (a *allocation) drawProject(src rand.Source) int {
-	rng := rand.New(src)
-	rand := rng.Intn(a.sum())
-
-	for i, v := range a {
-		if rand < v {
-			return i
-		}
-		rand -= v
-	}
-
-	panic("Sampling project failed")
-}
-
-func (a *allocation) mask() *allocation {
-	var res allocation
-	for i, x := range a {
-		if x > 0 {
-			res[i] = 1
-		}
-	}
-	return &res
-}
-
-func score(initial, current *allocation) int {
-	// return -current.smul(current.add(initial))
-	return -current.smul(current.add(initial.mask()))
-}
-
-type allocations []*allocation
-
-func (a allocations) avgVariability() float64 {
-	var res float64
-	for _, x := range a {
-		res += x.variablility()
-	}
-	return res / float64(len(a))
-}
-
 type state struct {
-	initial allocations
-	current allocations
-	src     rand.Source
+	initial      allocations
+	current      allocations
+	src          rand.Source
+	currentScore float64
+}
+
+func newState(initial allocations) *state {
+	s := state{
+		initial: initial,
+		current: initial,
+		src:     rand.NewSource(time.Now().UnixNano()),
+	}
+	s.currentScore = s.computeScore()
+
+	return &s
 }
 
 func (s state) numAllocations() int {
 	return len(s.initial)
 }
 
-func (s state) numTokens() int {
-	var total int
-	for _, x := range s.current {
-		total += x.sum()
-	}
-	return total
+func (s state) score() float64 {
+	return s.currentScore
 }
 
-func (s state) score() float64 {
+func (s state) computeScore() float64 {
 	var res float64
 	for i, c := range s.current {
-		res += float64(score(s.initial[i], c))
+		res += c.score(s.initial[i])
 	}
 	return res
+}
+
+func (s *state) swap(ia, ja, ib, jb int) {
+	s.current[ia] = s.current[ia].copy()
+	s.current[ib] = s.current[ib].copy()
+
+	a := s.current[ia]
+	b := s.current[ib]
+
+	s.currentScore -= a.score(s.initial[ia])
+	s.currentScore -= b.score(s.initial[ib])
+
+	a.moveToken(ja, b)
+	b.moveToken(jb, a)
+
+	s.currentScore += a.score(s.initial[ia])
+	s.currentScore += b.score(s.initial[ib])
 }
 
 func (s state) neighbor() state {
@@ -165,22 +71,16 @@ func (s state) neighbor() state {
 		return s
 	}
 
-	ja := s.current[ia].drawProject(s.src)
-	jb := s.current[ib].drawProject(s.src)
+	ja := s.current[ia].drawToken(s.src)
+	jb := s.current[ib].drawToken(s.src)
 	if ja == jb {
 		return s
 	}
 
-	current[ia] = current[ia].copy()
-	current[ib] = current[ib].copy()
-
-	current[ia][ja]--
-	current[ib][ja]++
-	current[ia][jb]++
-	current[ib][jb]--
-
 	s2 := s
 	s2.current = current
+	s2.swap(ia, ja, ib, jb)
+
 	return s2
 }
 
@@ -189,5 +89,28 @@ func (s state) Neighbor() hego.AnnealingState {
 }
 
 func (s state) Energy() float64 {
-	return -float64(s.score())
+	return -float64(s.currentScore)
+}
+
+func (s state) anneal(annealingFactor float64, verbose bool) (*state, *hego.SAResult, error) {
+	settings := hego.SASettings{
+		Temperature:     10,
+		AnnealingFactor: annealingFactor,
+	}
+
+	// iterations until we reach temp = 1
+	numIterToLukewarm := int(-math.Log(settings.Temperature) / math.Log(float64(settings.AnnealingFactor)))
+
+	settings.Settings.MaxIterations = 2 * numIterToLukewarm
+	if verbose {
+		settings.Settings.Verbose = settings.Settings.MaxIterations / 20
+	}
+
+	result, err := hego.SA(s, settings)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	finalState := result.State.(state)
+	return &finalState, &result, nil
 }
