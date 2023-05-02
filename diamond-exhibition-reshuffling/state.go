@@ -3,7 +3,6 @@ package main
 import (
 	"math"
 	"math/rand"
-	"time"
 
 	"github.com/ccssmnn/hego"
 )
@@ -15,13 +14,13 @@ type state struct {
 	currentScore float64
 }
 
-func newState(initial allocations) *state {
+func newState(initial allocations, src rand.Source) *state {
 	s := state{
 		initial: initial,
 		current: initial,
-		src:     rand.NewSource(time.Now().UnixNano()),
+		src:     src,
 	}
-	s.currentScore = s.computeScore()
+	s.currentScore = s.current.computeScore(s.initial)
 
 	return &s
 }
@@ -32,14 +31,6 @@ func (s state) numAllocations() int {
 
 func (s state) score() float64 {
 	return s.currentScore
-}
-
-func (s state) computeScore() float64 {
-	var res float64
-	for i, c := range s.current {
-		res += c.score(s.initial[i])
-	}
-	return res
 }
 
 func (s *state) swap(ia, ja, ib, jb int) {

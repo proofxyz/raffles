@@ -1,7 +1,9 @@
 package main
 
 import (
+	"math/rand"
 	"testing"
+	"time"
 )
 
 func TestScore(t *testing.T) {
@@ -23,7 +25,7 @@ func TestScore(t *testing.T) {
 			initial: map[int]int{1: 0, 2: 0, 3: 1}, // [2, 1, 0]
 			current: map[int]int{1: 0, 3: 1, 6: 2}, // [1, 1, 1]
 			// - regularisation - projectIdPenalty - tokenIdPenalty
-			want: -3 - 2 - 2,
+			want: -3 - 2 - 20,
 		},
 		{
 			name:    "duplicate projectIDs",
@@ -47,10 +49,10 @@ func TestScore(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			initial := allocation(tt.initial)
-			current := allocation(tt.current)
+			initial := newAllocationFromTokens(tt.initial)
+			current := newAllocationFromTokens(tt.current)
 
-			if got := current.score(&initial); got != tt.want {
+			if got := current.score(initial); got != tt.want {
 				t.Errorf("score(initial = %v, current = %v) = %v, want %v", initial, current, got, tt.want)
 			}
 		})
@@ -58,6 +60,8 @@ func TestScore(t *testing.T) {
 }
 
 func TestAnnealStats(t *testing.T) {
+	src := rand.NewSource(time.Now().UnixNano())
+
 	tests := []struct {
 		name                          string
 		submissions                   [][]int
@@ -83,10 +87,10 @@ func TestAnnealStats(t *testing.T) {
 				{1, 1, 1, 1, 1, 1, 1},
 				{2, 2, 2, 2, 2, 2, 2},
 			},
-			annealingFactor: 0.99999,
+			annealingFactor: 0.9999,
 			wantNumPerProject: []map[int]int{
-				{1: 3, 2: 4},
-				{1: 4, 2: 3},
+				{1: 1, 2: 6},
+				{1: 6, 2: 1},
 			},
 			maxNumIdenticalTokensReturned: 6,
 		},
@@ -96,7 +100,7 @@ func TestAnnealStats(t *testing.T) {
 				{1, 1, 1, 1},
 				{1, 1, 1, 1},
 			},
-			annealingFactor: 0.9999,
+			annealingFactor: 0.999,
 			wantNumPerProject: []map[int]int{
 				{1: 4},
 				{1: 4},
@@ -115,7 +119,7 @@ func TestAnnealStats(t *testing.T) {
 				{2},
 				{2},
 			},
-			annealingFactor: 0.9999,
+			annealingFactor: 0.999,
 			wantNumPerProject: []map[int]int{
 				{2: 1},
 				{2: 1},
@@ -137,7 +141,7 @@ func TestAnnealStats(t *testing.T) {
 				{4},
 				{5},
 			},
-			annealingFactor:               0.9999,
+			annealingFactor:               0.999,
 			maxNumIdenticalTokensReturned: 0,
 		},
 	}
@@ -150,7 +154,7 @@ func TestAnnealStats(t *testing.T) {
 				allocs = append(allocs, newAllocationFromSubmission(s))
 			}
 
-			s, _, err := newState(allocs).anneal(tt.annealingFactor, false)
+			s, _, err := newState(allocs, src).anneal(tt.annealingFactor, false)
 			if err != nil {
 				t.Errorf("anneal(): err %v", err)
 			}
@@ -161,23 +165,28 @@ func TestAnnealStats(t *testing.T) {
 			)
 
 			for i, c := range s.current {
-				for tokenId := range *c {
+				if len(c.tokens) != len(s.initial[i].tokens) {
+					t.Errorf("len(current[%d].tokens) = %d, want %d", i, len(c.tokens), len(s.initial[i].tokens))
+				}
+
+				for tokenId := range c.tokens {
+					// Sanity check to see if any tokens have been repeated
 					if _, ok := seen[tokenId]; ok {
 						t.Errorf("duplicate tokenId %d", tokenId)
 					}
 					seen[tokenId] = struct{}{}
 
-					if _, ok := (*s.initial[i])[tokenId]; ok {
+					if _, ok := s.initial[i].tokens[tokenId]; ok {
 						numIdenticalTokensReturned++
 					}
 				}
 
 				if tt.wantNumPerProject != nil {
-					got := c.numPerProject()
+					got := c.NumPerProject()
 					want := tt.wantNumPerProject[i]
 					for projectId, num := range got {
 						if num != want[projectId] {
-							t.Errorf("numPerProject(projectId %d): got %d, want %d", projectId, num, want[projectId])
+							t.Errorf("NumPerProject(projectId %d): got %d, want %d", projectId, num, want[projectId])
 						}
 					}
 				}
