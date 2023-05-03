@@ -6,110 +6,66 @@ import (
 	"time"
 )
 
-func TestScore(t *testing.T) {
-	tests := []struct {
-		name    string
-		initial map[int]int
-		current map[int]int
-		want    float64
-	}{
-		{
-			name:    "same project ID",
-			initial: map[int]int{1: 0, 2: 0, 3: 1}, // [2, 1, 0]
-			current: map[int]int{4: 0, 5: 1, 6: 2}, // [1, 1, 1]
-			// - regularisation - projectIdPenalty - tokenIdPenalty
-			want: -3 - 2 - 0,
-		},
-		{
-			name:    "same tokenId ID",
-			initial: map[int]int{1: 0, 2: 0, 3: 1}, // [2, 1, 0]
-			current: map[int]int{1: 0, 3: 1, 6: 2}, // [1, 1, 1]
-			// - regularisation - projectIdPenalty - tokenIdPenalty
-			want: -3 - 2 - 20,
-		},
-		{
-			name:    "duplicate projectIDs",
-			initial: map[int]int{1: 0, 2: 0, 3: 1}, // [2, 1, 0]
-			current: map[int]int{4: 2, 5: 2, 6: 2}, // [0, 0, 3]
-			want:    -9 - 0 - 0,
-		},
-		{
-			name:    "mixed",
-			initial: map[int]int{1: 0, 2: 0, 3: 1}, // [2, 1, 0]
-			current: map[int]int{4: 2, 5: 0, 6: 2}, // [1, 0, 2]
-			want:    -5 - 1 - 0,
-		},
-		{
-			name:    "mixed",
-			initial: map[int]int{1: 0, 2: 1, 3: 2}, // [1, 1, 1]
-			current: map[int]int{4: 0, 5: 1, 6: 2}, // [1, 1, 1]
-			want:    -3 - 3 - 0,
-		},
+func newAllocationsFromProjectIds(xss [][]int) allocations {
+	var allocs allocations
+	for _, xs := range xss {
+		allocs = append(allocs, newAllocationFromProjects(xs))
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			initial := newAllocationFromTokens(tt.initial)
-			current := newAllocationFromTokens(tt.current)
-
-			if got := current.score(initial); got != tt.want {
-				t.Errorf("score(initial = %v, current = %v) = %v, want %v", initial, current, got, tt.want)
-			}
-		})
-	}
+	return allocs
 }
 
 func TestAnnealStats(t *testing.T) {
 	src := rand.NewSource(time.Now().UnixNano())
 
 	tests := []struct {
-		name                          string
-		submissions                   [][]int
-		annealingFactor               float64
-		maxNumIdenticalTokensReturned int
-		wantNumPerProject             []map[int]int
+		name                           string
+		allocations                    allocations
+		annealingFactor                float64
+		wantNumIdenticalTokensReturned int
+		wantNumPerProject              []map[int]int
 	}{
 		{
 			name: "standard",
-			submissions: [][]int{
+			allocations: newAllocationsFromProjectIds([][]int{
 				{1, 1},
 				{2, 2, 2, 3, 3},
 				{3, 3, 4, 4},
 				{4, 4, 1, 1},
 				{1, 2, 3, 4, 0},
-			},
-			annealingFactor:               0.9999,
-			maxNumIdenticalTokensReturned: 0,
+			}),
+			annealingFactor:                0.9999,
+			wantNumIdenticalTokensReturned: 0,
 		},
 		{
 			name: "swap half batches",
-			submissions: [][]int{
+			allocations: newAllocationsFromProjectIds([][]int{
 				{1, 1, 1, 1, 1, 1, 1},
 				{2, 2, 2, 2, 2, 2, 2},
-			},
+			}),
 			annealingFactor: 0.9999,
 			wantNumPerProject: []map[int]int{
-				{1: 1, 2: 6},
-				{1: 6, 2: 1},
+				// this is a result of the compromise between getting the same tokens back and variability
+				{1: 3, 2: 4},
+				{1: 4, 2: 3},
 			},
-			maxNumIdenticalTokensReturned: 6,
+			wantNumIdenticalTokensReturned: 6,
 		},
 		{
 			name: "swap identical batches",
-			submissions: [][]int{
+			allocations: newAllocationsFromProjectIds([][]int{
 				{1, 1, 1, 1},
 				{1, 1, 1, 1},
-			},
+			}),
 			annealingFactor: 0.999,
 			wantNumPerProject: []map[int]int{
 				{1: 4},
 				{1: 4},
 			},
-			maxNumIdenticalTokensReturned: 0,
+			wantNumIdenticalTokensReturned: 0,
 		},
 		{
 			name: "swap single submission",
-			submissions: [][]int{
+			allocations: newAllocationsFromProjectIds([][]int{
 				{1},
 				{1},
 				{1},
@@ -118,7 +74,7 @@ func TestAnnealStats(t *testing.T) {
 				{2},
 				{2},
 				{2},
-			},
+			}),
 			annealingFactor: 0.999,
 			wantNumPerProject: []map[int]int{
 				{2: 1},
@@ -130,31 +86,47 @@ func TestAnnealStats(t *testing.T) {
 				{1: 1},
 				{1: 1},
 			},
-			maxNumIdenticalTokensReturned: 0,
+			wantNumIdenticalTokensReturned: 0,
 		},
 		{
 			name: "rotation",
-			submissions: [][]int{
+			allocations: newAllocationsFromProjectIds([][]int{
 				{1},
 				{2},
 				{3},
 				{4},
 				{5},
+			}),
+			annealingFactor:                0.999,
+			wantNumIdenticalTokensReturned: 0,
+		},
+		{
+			name: "inbalanced",
+			allocations: allocations{
+				newAllocationFromProjects([]int{0, 0, 0, 0, 0}),
+				newAllocationFromProjects([]int{1, 2, 3, 4, 5}),
 			},
-			annealingFactor:               0.999,
-			maxNumIdenticalTokensReturned: 0,
+			annealingFactor:                0.999,
+			wantNumIdenticalTokensReturned: 4, // meaning that 3 tokens were swapped
+		},
+		{
+			name: "with pool",
+			allocations: allocations{
+				newAllocationFromProjects([]int{0, 0, 0, 0, 0}),
+				asPool(newAllocationFromProjects([]int{1, 2, 3, 4, 5})),
+			},
+			annealingFactor:                0.999,
+			wantNumIdenticalTokensReturned: 0, // all tokens can be swapped since the pool does not care
+			wantNumPerProject: []map[int]int{
+				{1: 1, 2: 1, 3: 1, 4: 1, 5: 1},
+				{0: 5},
+			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
-			var allocs []*allocation
-			for _, s := range tt.submissions {
-				allocs = append(allocs, newAllocationFromSubmission(s))
-			}
-
-			s, _, err := newState(allocs, src).anneal(tt.annealingFactor, false)
+			s, _, err := newState(tt.allocations, src).anneal(tt.annealingFactor, false)
 			if err != nil {
 				t.Errorf("anneal(): err %v", err)
 			}
@@ -170,7 +142,7 @@ func TestAnnealStats(t *testing.T) {
 				}
 
 				for tokenId := range c.tokens {
-					// Sanity check to see if any tokens have been repeated
+					// Sanity check for duplicate tokens
 					if _, ok := seen[tokenId]; ok {
 						t.Errorf("duplicate tokenId %d", tokenId)
 					}
@@ -182,18 +154,18 @@ func TestAnnealStats(t *testing.T) {
 				}
 
 				if tt.wantNumPerProject != nil {
-					got := c.NumPerProject()
+					got := c.numPerProject()
 					want := tt.wantNumPerProject[i]
 					for projectId, num := range got {
 						if num != want[projectId] {
-							t.Errorf("NumPerProject(projectId %d): got %d, want %d", projectId, num, want[projectId])
+							t.Errorf("allocation[%d].NumPerProject(projectId %d): got %d, want %d", i, projectId, num, want[projectId])
 						}
 					}
 				}
 			}
 
-			if numIdenticalTokensReturned > tt.maxNumIdenticalTokensReturned {
-				t.Errorf("numIdenticalTokensReturned = %d, want <= %d", numIdenticalTokensReturned, tt.maxNumIdenticalTokensReturned)
+			if numIdenticalTokensReturned != tt.wantNumIdenticalTokensReturned {
+				t.Errorf("numIdenticalTokensReturned = %d, want = %d", numIdenticalTokensReturned, tt.wantNumIdenticalTokensReturned)
 			}
 
 		})
