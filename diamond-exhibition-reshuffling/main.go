@@ -47,7 +47,7 @@ func main() {
 	}
 }
 
-func run(seedHex string) error {
+func run(seedHex string) (retErr error) {
 	// Load data
 	airdrops := make(map[int]Airdrop)
 	{
@@ -100,6 +100,7 @@ func run(seedHex string) error {
 
 	fmt.Printf("numSubmitters=%d, numTokens=%d\n", len(submitters), initial.numTokens())
 	fmt.Println(initial.numPerProject())
+	fmt.Printf("%.2f\n", initial.numPerProject().normalised())
 
 	seed, err := foldSeed(seedHex)
 	if err != nil {
@@ -116,12 +117,22 @@ func run(seedHex string) error {
 		return fmt.Errorf("%T.anneal(): %v", state, err)
 	}
 
-	if err := state.printReallocation(os.Stdout); err != nil {
-		return fmt.Errorf("%T.printReallocation(): %v", state, err)
-	}
-
 	if err := state.printStats(os.Stderr); err != nil {
 		return fmt.Errorf("%T.printStats(): %v", state, err)
+	}
+
+	f, err := os.Create("reallocation.txt")
+	if err != nil {
+		return fmt.Errorf("os.Create(): %v", err)
+	}
+	defer func() {
+		if err := f.Close(); err != nil && retErr == nil {
+			retErr = fmt.Errorf("f.Close(): %v", err)
+		}
+	}()
+
+	if err := state.printReallocation(f); err != nil {
+		return fmt.Errorf("%T.printReallocation(): %v", state, err)
 	}
 
 	return nil

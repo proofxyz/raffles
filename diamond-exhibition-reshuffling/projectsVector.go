@@ -23,6 +23,15 @@ func (a projectsVector) add(b projectsVector) projectsVector {
 	return res
 }
 
+// sum computes the sum of all elements in the vector.
+func (v projectsVector) sum() int {
+	var s int
+	for _, x := range v {
+		s += x
+	}
+	return s
+}
+
 // mask returns a vector with 1s in the positions where the original vector is non-zero
 func (a projectsVector) mask() projectsVector {
 	var res projectsVector
@@ -39,4 +48,15 @@ func (a projectsVector) copy() projectsVector {
 	var c projectsVector
 	copy(c[:], a[:])
 	return c
+}
+
+// normalised returns the vector normalised to sum to 1.
+func (a projectsVector) normalised() [numProjects]float64 {
+	sum := float64(a.sum())
+
+	var res [numProjects]float64
+	for i, x := range a {
+		res[i] = float64(x) / sum
+	}
+	return res
 }
