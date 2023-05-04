@@ -1,5 +1,7 @@
 package main
 
+import "math/rand"
+
 type token struct {
 	TokenID   int
 	ProjectID int
@@ -7,6 +9,29 @@ type token struct {
 
 // tokens is a list of tokens.
 type tokens []token
+
+// copy returns a deep copy of the token list.
+func (ts tokens) copy() tokens {
+	c := make(tokens, len(ts))
+	copy(c, ts)
+	return c
+}
+
+// numTokens returns the number of tokens in the allocation.
+func (ts tokens) numTokens() int {
+	return len(ts)
+}
+
+// numDistinct returns the number of distinct projects in the allocation.
+func (ts tokens) numProjects() int {
+	var n int
+	for _, x := range ts.numPerProject() {
+		if x > 0 {
+			n++
+		}
+	}
+	return n
+}
 
 // numPerProject computes the number of tokens per project.
 func (ts tokens) numPerProject() projectsVector {
@@ -17,11 +42,9 @@ func (ts tokens) numPerProject() projectsVector {
 	return num
 }
 
-// copy returns a deep copy of the token list.
-func (ts tokens) copy() tokens {
-	c := make(tokens, len(ts))
-	copy(c, ts)
-	return c
+// variability returns a basic measure for the variability of the allocation.
+func (ts tokens) variability() float64 {
+	return float64(ts.numProjects()) / float64(ts.numTokens())
 }
 
 // numSameTokenID returns the number of tokens with the same tokenID that are present in both token lists.
@@ -42,9 +65,36 @@ func (ts tokens) numSameTokenID(other tokens) int {
 	return num
 }
 
-// swapToken swaps a token from one list with a token from another list.
-func (a tokens) swapToken(ia int, b tokens, ib int) {
-	a[ia], b[ib] = b[ib], a[ia]
+// numSameProjects returns the number of tokens whose projects are also present in the other allocation.
+func (ts tokens) numInSameProjects(other tokens) int {
+	o := other.numPerProject()
+
+	var total int
+	for pID, n := range ts.numPerProject() {
+		if n == 0 {
+			continue
+		}
+		if o[pID] > 0 {
+			total += n
+		}
+	}
+	return total
+}
+
+// numInDuplicateProjects returns the number of tokens whose projects are present more than once in the allocation.
+func (ts tokens) numInDuplicateProjects() int {
+	var n int
+	for _, num := range ts.numPerProject() {
+		if num > 1 {
+			n += num - 1
+		}
+	}
+	return n
+}
+
+// drawTokenIdx draws a random token index from the allocation.
+func (ts tokens) drawTokenIdx(src rand.Source) int {
+	return rand.New(src).Intn(ts.numTokens())
 }
 
 // nextFakeTokenId is a counter used to generate fake token ids.

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"io"
 	"math"
 	"math/rand"
 
@@ -92,17 +94,17 @@ func (s *state) neighbor() *state {
 }
 
 // Neighbor returns a neighbor of the current state for the simulated annealing process.
-func (s state) Neighbor() hego.AnnealingState {
+func (s *state) Neighbor() hego.AnnealingState {
 	return s.neighbor()
 }
 
 // Energy returns the energy of the current state for the simulated annealing process.
-func (s state) Energy() float64 {
+func (s *state) Energy() float64 {
 	return -float64(s.cachedScore)
 }
 
 // anneal runs the simulated annealing algorithm on the state.
-func (s state) anneal(annealingFactor float64, verbose bool) (*state, *hego.SAResult, error) {
+func (s *state) anneal(annealingFactor float64, verbose bool) (*state, *hego.SAResult, error) {
 	settings := hego.SASettings{
 		Temperature:     10,
 		AnnealingFactor: annealingFactor,
@@ -129,4 +131,62 @@ func (s state) anneal(annealingFactor float64, verbose bool) (*state, *hego.SARe
 
 	finalState := result.State.(*state)
 	return finalState, &result, nil
+}
+
+// printStats prints statistics about the current state.
+func (s *state) printStats(w io.Writer) error {
+	var (
+		numInitTokensTotal  int
+		numInInitProjsTotal int
+		numInDupeProjsTotal int
+	)
+
+	for i, current := range s.current {
+		initial := s.initial[i]
+		numInitTokens := current.numSameTokenID(initial.tokens)
+		numInInitProjs := current.numInSameProjects(initial.tokens)
+		numInDupeProjs := current.numInDuplicateProjects()
+
+		if current.isPool {
+			continue
+		}
+
+		numInitTokensTotal += numInitTokens
+		numInInitProjsTotal += numInInitProjs
+		numInDupeProjsTotal += numInDupeProjs
+	}
+
+	_, err := fmt.Fprintf(w, "Current allocation stats: size=%d, energy=%.0f, numInitTokens=%d, numInInitProjs=%d, numInDupeProjs=%d\n",
+		s.numTokens(),
+		s.Energy(),
+		numInitTokensTotal,
+		numInInitProjsTotal,
+		numInDupeProjsTotal,
+	)
+
+	return err
+}
+
+// printReallocation prints the reallocation of the current state.
+func (s *state) printReallocation(w io.Writer) error {
+	for i, current := range s.current {
+		initial := s.initial[i]
+		numInitTokens := current.numSameTokenID(initial.tokens)
+		numInInitProjs := current.numInSameProjects(initial.tokens)
+		numInDupeProjs := current.numInDuplicateProjects()
+
+		_, err := fmt.Fprintf(w, "%v -> %v: var=%.3f, numInitTokens=%d, numInInitProjs=%d, numInDupeProjs=%d\n",
+			initial.numPerProject(),
+			current.numPerProject(),
+			current.variability(),
+			numInitTokens,
+			numInInitProjs,
+			numInDupeProjs,
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

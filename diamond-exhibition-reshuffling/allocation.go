@@ -1,12 +1,8 @@
 package main
 
-import (
-	"math/rand"
-)
-
 // allocation is a set of tokens allocated to a participant.
 type allocation struct {
-	tokens               tokens         // the tokens in the allocation
+	tokens                              // the tokens in the allocation
 	cachedNumPerProjects projectsVector // number of tokens per project, cached for performance
 	isPool               bool           // flag to indicate whether the allocation is the pool (disables the score function)
 }
@@ -18,11 +14,6 @@ func newAllocation(t tokens) *allocation {
 		cachedNumPerProjects: t.numPerProject(),
 		isPool:               false,
 	}
-}
-
-// numTokens returns the number of tokens in the allocation.
-func (a *allocation) numTokens() int {
-	return len(a.tokens)
 }
 
 // numPerProject returns the number of tokens per project from cache.
@@ -37,27 +28,6 @@ func (a *allocation) copy() *allocation {
 	c.tokens = a.tokens.copy()
 	c.cachedNumPerProjects = a.cachedNumPerProjects.copy()
 	return &c
-}
-
-// variability returns a basic measure for the variability of the allocation.
-func (a *allocation) variability() float64 {
-	return float64(a.numProjects()) / float64(a.numTokens())
-}
-
-// numDistinct returns the number of distinct projects in the allocation.
-func (a *allocation) numProjects() int {
-	var n int
-	for _, x := range a.numPerProject() {
-		if x > 0 {
-			n++
-		}
-	}
-	return n
-}
-
-// drawTokenIdx draws a random token index from the allocation.
-func (a *allocation) drawTokenIdx(src rand.Source) int {
-	return rand.New(src).Intn(a.numTokens())
 }
 
 // score returns a score for the current allocation, where higher is better.
@@ -86,61 +56,18 @@ func (a *allocation) swapToken(ia int, b *allocation, ib int) {
 	b.cachedNumPerProjects[projectIdB]--
 	a.cachedNumPerProjects[projectIdB]++
 
-	a.tokens.swapToken(ia, b.tokens, ib)
-}
-
-// numSameTokenID returns the number of tokens with the same tokenID that are present in both allocations.
-func (a *allocation) numSameTokenID(other *allocation) int {
-	return a.tokens.numSameTokenID(other.tokens)
-}
-
-// numSameProjects returns the number of tokens whose projects are also present in the other allocation.
-func (a *allocation) numInSameProjects(other *allocation) int {
-	o := other.numPerProject()
-
-	var total int
-	for pID, n := range a.numPerProject() {
-		if n == 0 {
-			continue
-		}
-		if o[pID] > 0 {
-			total += n
-		}
-	}
-	return total
-}
-
-// numInDuplicateProjects returns the number of tokens whose projects are present more than once in the allocation.
-func (a *allocation) numInDuplicateProjects() int {
-	var n int
-	for _, num := range a.numPerProject() {
-		if num > 1 {
-			n += num - 1
-		}
-	}
-	return n
+	a.tokens[ia], b.tokens[ib] = b.tokens[ib], a.tokens[ia]
 }
 
 // allocations is a slice of allocations. This is a convenience type to
 // perform actions over multiple of allocations.
 type allocations []*allocation
 
-// avgVariability computes the average variability of a slice of allocations.
-func (a allocations) avgVariability() float64 {
-	var res float64
-	for _, x := range a {
-		res += x.variability()
-	}
-	return res / float64(len(a))
-}
-
-// score computes the sum of the scores of a slice of allocations.
-func (current allocations) score(initial allocations) float64 {
-	var res float64
-	for i, c := range current {
-		res += c.score(initial[i])
-	}
-	return res
+// copyShallow returns a shallow copy of the allocations.
+func (a allocations) copyShallow() allocations {
+	c := make(allocations, len(a))
+	copy(c, a)
+	return c
 }
 
 // numTokens computes the total number of tokens in a slice of allocations.
@@ -161,11 +88,22 @@ func (as allocations) numPerProject() projectsVector {
 	return total
 }
 
-// copyShallow returns a shallow copy of the allocations.
-func (a allocations) copyShallow() allocations {
-	c := make(allocations, len(a))
-	copy(c, a)
-	return c
+// score computes the sum of the scores of a slice of allocations.
+func (current allocations) score(initial allocations) float64 {
+	var res float64
+	for i, c := range current {
+		res += c.score(initial[i])
+	}
+	return res
+}
+
+// avgVariability computes the average variability of a slice of allocations.
+func (a allocations) avgVariability() float64 {
+	var res float64
+	for _, x := range a {
+		res += x.variability()
+	}
+	return res / float64(len(a))
 }
 
 // duplicateTokenIDs returns a list of token ids that are present more than once

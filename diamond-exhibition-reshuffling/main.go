@@ -1,14 +1,19 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"math/rand"
+	"os"
 	"sort"
+	"strings"
+	"unsafe"
 
 	_ "embed"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gocarina/gocsv"
+	"github.com/holiman/uint256"
 )
 
 //go:embed airdrops.csv
@@ -17,7 +22,7 @@ var rawAirdrops []byte
 //go:embed transfers.csv
 var rawTransfers []byte
 
-type AirdropInfo struct {
+type Airdrop struct {
 	TokenId   int
 	Receiver  common.Address `csv:"Airdrop receiver"`
 	ProjectId int
@@ -28,27 +33,44 @@ type Transfer struct {
 	TokenId int            `csv:"TokenId"`
 }
 
+func stderr(format string, a ...interface{}) {
+	fmt.Fprintf(os.Stderr, format, a...)
+}
+
 func main() {
-	var airdrops []AirdropInfo
-	gocsv.UnmarshalBytes(rawAirdrops, &airdrops)
+	seedHex := flag.String("seed_hex", "0", "Hexadecimal seed; at most 256 bits.")
+	flag.Parse()
 
-	var transfers []Transfer
-	gocsv.UnmarshalBytes(rawTransfers, &transfers)
+	if err := run(*seedHex); err != nil {
+		stderr("%v\n", err)
+		os.Exit(1)
+	}
+}
 
-	allTokens := make(map[int]int)
-	receivers := make(map[int]common.Address)
-	for _, v := range airdrops {
-		allTokens[v.TokenId] = v.ProjectId
-		receivers[v.TokenId] = v.Receiver
+func run(seedHex string) error {
+	// Load data
+	airdrops := make(map[int]Airdrop)
+	{
+		var air []Airdrop
+		gocsv.UnmarshalBytes(rawAirdrops, &air)
+
+		for _, v := range air {
+			airdrops[v.TokenId] = v
+		}
 	}
 
 	submissions := make(map[common.Address][]int)
-	for _, v := range transfers {
-		if v.From != receivers[v.TokenId] {
-			fmt.Println("Rejected", v.From, v.TokenId)
-			continue
+	{
+		var transfers []Transfer
+		gocsv.UnmarshalBytes(rawTransfers, &transfers)
+
+		for _, v := range transfers {
+			if v.From != airdrops[v.TokenId].Receiver {
+				stderr("Rejecting token %d: from=%v, receiver=%v\n", v.TokenId, v.From, airdrops[v.TokenId].Receiver)
+				continue
+			}
+			submissions[v.From] = append(submissions[v.From], v.TokenId)
 		}
-		submissions[v.From] = append(submissions[v.From], v.TokenId)
 	}
 
 	// Committing to an initial ordering to make the results deterministic.
@@ -60,76 +82,69 @@ func main() {
 		return submitters[i].Hex() < submitters[j].Hex()
 	})
 
-	var initialAllocs allocations
+	// Parse initial allocations from submissions
+	var initial allocations
 	for _, s := range submitters {
 		var ts tokens
 		for _, t := range submissions[s] {
-			ts = append(ts, token{TokenID: t, ProjectID: allTokens[t]})
+			ts = append(ts, token{TokenID: t, ProjectID: airdrops[t].ProjectId})
 		}
-		initialAllocs = append(initialAllocs, newAllocation(ts))
+		initial = append(initial, newAllocation(ts))
 	}
-	fmt.Printf("numSubmitters=%d, numTokens=%d, numTransfers=%d\n", len(submitters), initialAllocs.numTokens(), len(transfers))
 
-	dupes := initialAllocs.duplicateTokenIDs()
+	// Sanity checks
+	dupes := initial.duplicateTokenIDs()
 	if len(dupes) > 0 {
-		panic(fmt.Errorf("not all tokens unique: %v", dupes))
+		return fmt.Errorf("not all tokens unique: %v", dupes)
 	}
 
-	fmt.Println(initialAllocs.numPerProject())
+	fmt.Printf("numSubmitters=%d, numTokens=%d\n", len(submitters), initial.numTokens())
+	fmt.Println(initial.numPerProject())
 
-	// src := rand.NewSource(time.Now().UnixNano())
-
-	seed := int64(10)
-	src := rand.NewSource(seed)
-
-	s := newState(initialAllocs, src)
-	fmt.Println(s.score())
-
-	// finalState, _, err := s.anneal(0.99, true)
-	finalState, _, err := s.anneal(0.99999, true)
+	seed, err := foldSeed(seedHex)
 	if err != nil {
-		fmt.Printf("Got error while running Anneal: %v", err)
+		return fmt.Errorf("foldSeed(%q): %v", seedHex, err)
 	}
 
-	var (
-		numInitTokensTotal  int
-		numInInitProjsTotal int
-		numInDupeProjsTotal int
-	)
+	state := newState(initial, rand.NewSource(seed))
 
-	for i, current := range finalState.current {
-		initial := finalState.initial[i]
-		numInitTokens := current.numSameTokenID(initial)
-		numInInitProjs := current.numInSameProjects(initial)
-		numInDupeProjs := current.numInDuplicateProjects()
-
-		// fmt.Printf("%v -> %v: var=%.3f, numInitTokens=%d, numInInitProjs=%d, numInDupeProjs=%d\n",
-		// 	initial.numPerProject(),
-		// 	current.numPerProject(),
-		// 	current.variability(),
-		// 	numInitTokens,
-		// 	numInInitProjs,
-		// 	numInDupeProjs,
-		// )
-
-		if current.isPool {
-			continue
-		}
-
-		numInitTokensTotal += numInitTokens
-		numInInitProjsTotal += numInInitProjs
-		numInDupeProjsTotal += numInDupeProjs
+	if err := state.printStats(os.Stderr); err != nil {
+		return fmt.Errorf("%T.printStats(): %v", state, err)
 	}
 
-	fmt.Printf("TOTAL: size=%d, numInitTokens=%d, numInInitProjs=%d, numInDupeProjs=%d\n",
-		s.numTokens(),
-		numInitTokensTotal,
-		numInInitProjsTotal,
-		numInDupeProjsTotal,
-	)
+	if state, _, err = state.anneal(0.99999, true); err != nil {
+		return fmt.Errorf("%T.anneal(): %v", state, err)
+	}
 
-	fmt.Println(
-		finalState.initial.avgVariability(),
-		finalState.current.avgVariability(),
-	)
+	if err := state.printReallocation(os.Stdout); err != nil {
+		return fmt.Errorf("%T.printReallocation(): %v", state, err)
+	}
+
+	if err := state.printStats(os.Stderr); err != nil {
+		return fmt.Errorf("%T.printStats(): %v", state, err)
+	}
+
+	return nil
+}
+
+// foldSeed treats seedHex as a uint256, returning the xor of the 4 uint64s,
+// treating the raw bits as in int64 for use in a rand.Source.
+func foldSeed(seedHex string) (int64, error) {
+	if !strings.HasPrefix(seedHex, "0x") {
+		seedHex = fmt.Sprintf("0x%s", seedHex)
+	}
+	if len(seedHex) > 2+64 {
+		return 0, fmt.Errorf("hex seed %q longer than 256 bits", seedHex)
+	}
+
+	int, err := uint256.FromHex(seedHex)
+	if err != nil {
+		return 0, fmt.Errorf("uint256.FromHex(seed = %q): %v", seedHex, err)
+	}
+
+	var seed uint64
+	for _, u := range ([4]uint64)(*int) {
+		seed ^= u
+	}
+	return *(*int64)(unsafe.Pointer(&seed)), nil
 }
