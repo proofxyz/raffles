@@ -141,17 +141,15 @@ func TestAnnealStats(t *testing.T) {
 					t.Errorf("len(current[%d].tokens) = %d, want %d", i, len(c.tokens), len(s.initial[i].tokens))
 				}
 
-				for tokenId := range c.tokens {
+				for _, v := range c.tokens {
 					// Sanity check for duplicate tokens
-					if _, ok := seen[tokenId]; ok {
-						t.Errorf("duplicate tokenId %d", tokenId)
+					if _, ok := seen[v.TokenID]; ok {
+						t.Errorf("duplicate tokenId %d", v.TokenID)
 					}
-					seen[tokenId] = struct{}{}
-
-					if _, ok := s.initial[i].tokens[tokenId]; ok {
-						numIdenticalTokensReturned++
-					}
+					seen[v.TokenID] = struct{}{}
 				}
+
+				numIdenticalTokensReturned += c.numIdenticalInitialTokens(s.initial[i])
 
 				if tt.wantNumPerProject != nil {
 					got := c.numPerProject()
