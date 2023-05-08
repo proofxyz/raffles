@@ -110,12 +110,12 @@ func (s *state) anneal(annealingFactor float64, verbose bool) (*state, *hego.SAR
 		AnnealingFactor: annealingFactor,
 	}
 
-	// iterations until we reach temp = 1 (which is the minimum energy difference
-	// between two neighboring, non-equivalent states)
-	// From here on, the energy of the state can therefore only decrease.
-	numIterToCold := int(-math.Log(settings.Temperature) / math.Log(float64(settings.AnnealingFactor)))
+	// Iterations until we reach temp = 1 (which is the minimum energy difference between two neighboring, non-equivalent states)
+	// The probability of accepting a worse state is <= 1/e at this point.
+	// We use this to get an estimate for the amount of iterations needed for cooling.
+	numIterToLukewarm := int(-math.Log(settings.Temperature) / math.Log(float64(settings.AnnealingFactor)))
 
-	settings.Settings.MaxIterations = 2 * numIterToCold
+	settings.Settings.MaxIterations = 2 * numIterToLukewarm
 	if verbose {
 		settings.Settings.Verbose = settings.Settings.MaxIterations / 20
 	}
@@ -133,28 +133,24 @@ func (s *state) anneal(annealingFactor float64, verbose bool) (*state, *hego.SAR
 	return finalState, &result, nil
 }
 
-// printStats prints statistics about the current state.
-func (s *state) printStats(w io.Writer) error {
-	var (
-		numInitTokensTotal  int
-		numInInitProjsTotal int
-		numInDupeProjsTotal int
-	)
-
+func (s *state) computeStats() (numInitTokensTotal, numInInitProjsTotal, numInDupeProjsTotal int) {
 	for i, current := range s.current {
-		initial := s.initial[i]
-		numInitTokens := current.numSameTokenID(initial.tokens)
-		numInInitProjs := current.numInSameProjects(initial.tokens)
-		numInDupeProjs := current.numInDuplicateProjects()
-
 		if current.isPool {
 			continue
 		}
 
-		numInitTokensTotal += numInitTokens
-		numInInitProjsTotal += numInInitProjs
-		numInDupeProjsTotal += numInDupeProjs
+		initial := s.initial[i]
+		numInitTokensTotal += current.numSameTokenID(initial.tokens)
+		numInInitProjsTotal += current.numInSameProjects(initial.tokens)
+		numInDupeProjsTotal += current.numInDuplicateProjects()
 	}
+
+	return
+}
+
+// printStats prints statistics about the current state.
+func (s *state) printStats(w io.Writer) error {
+	numInitTokensTotal, numInInitProjsTotal, numInDupeProjsTotal := s.computeStats()
 
 	_, err := fmt.Fprintf(w, "Current allocation stats: size=%d, energy=%.0f, numInitTokens=%d, numInInitProjs=%d, numInDupeProjs=%d\n",
 		s.numTokens(),
@@ -167,8 +163,9 @@ func (s *state) printStats(w io.Writer) error {
 	return err
 }
 
-// printReallocation prints the reallocation of the current state.
-func (s *state) printReallocation(w io.Writer) error {
+// printReallocationOverview prints an overview on the reallocations in the current state,
+// i.e. the number of tokens per project before and after the reallocation with some additional statistics.
+func (s *state) printReallocationOverview(w io.Writer) error {
 	for i, current := range s.current {
 		initial := s.initial[i]
 		numInitTokens := current.numSameTokenID(initial.tokens)
@@ -189,4 +186,24 @@ func (s *state) printReallocation(w io.Writer) error {
 	}
 
 	return nil
+}
+
+// isTrivialOptimum returns true if the current state is a trivial optimum.
+// A trivial optimum is a state where all submitters get no duplicate projects and none of the tokens/projects
+// that they put in, with the score function assuming its theoretical maximum.
+// Depending on the given problem, this optimum might not be reachable. But if it is reached, we can be certain that we
+// can't improve from there.
+func (s *state) isTrivialOptimum() bool {
+	numInitTokensTotal, numInInitProjsTotal, numInDupeProjsTotal := s.computeStats()
+	score := s.score()
+
+	return numInitTokensTotal == 0 && numInInitProjsTotal == 0 && numInDupeProjsTotal == 0 &&
+		// The theoretical maximum of the score function can be computed by analysing the individual terms
+		// of the allocation score function (for the numbering see `allocation.score()`).
+		// The terms are bound by:
+		// (1) >= allocation.numTokens()
+		// (2) >= 0
+		// (3) >= 0
+		// The maximum value of the composite score function over all allocations is therefore given by the total number of tokens.
+		score == -float64(s.numTokens())
 }

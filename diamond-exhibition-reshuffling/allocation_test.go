@@ -3,17 +3,20 @@ package main
 import (
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/google/go-cmp/cmp"
 )
 
-func TestNewAllocationFromTokens(t *testing.T) {
+func TestNewAllocation(t *testing.T) {
 	tests := []struct {
 		name               string
+		addr               common.Address
 		tokens             tokens
 		wantNumPerProjects projectsVector
 	}{
 		{
 			name: "uniques",
+			addr: common.HexToAddress("0xdeadbeef"),
 			tokens: tokens{
 				{TokenID: 1, ProjectID: 3},
 				{TokenID: 2, ProjectID: 0},
@@ -23,6 +26,7 @@ func TestNewAllocationFromTokens(t *testing.T) {
 		},
 		{
 			name: "with duplicate project",
+			addr: common.HexToAddress("0x1234"),
 			tokens: tokens{
 				{TokenID: 1, ProjectID: 0},
 				{TokenID: 2, ProjectID: 0},
@@ -34,9 +38,13 @@ func TestNewAllocationFromTokens(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := newAllocationFromTokens(tt.tokens)
+			got := newAllocation(tt.addr, tt.tokens)
 			if diff := cmp.Diff(tt.tokens, got.tokens); diff != "" {
 				t.Errorf("got.tokens diff (+got -want) %v", diff)
+			}
+
+			if tt.addr != got.owner {
+				t.Errorf("got.owner %v, want %v", got.owner, tt.addr)
 			}
 
 			if diff := cmp.Diff(tt.wantNumPerProjects, got.numPerProject()); diff != "" {
@@ -45,6 +53,8 @@ func TestNewAllocationFromTokens(t *testing.T) {
 		})
 	}
 }
+
+var defaultAddr = common.HexToAddress("0xdeadbeef")
 
 func asPool(a *allocation) *allocation {
 	a.isPool = true
@@ -58,7 +68,7 @@ func TestCopy(t *testing.T) {
 	}{
 		{
 			name: "normal",
-			allocation: newAllocationFromTokens(tokens{
+			allocation: newAllocation(defaultAddr, tokens{
 				{TokenID: 1, ProjectID: 0},
 				{TokenID: 2, ProjectID: 0},
 				{TokenID: 3, ProjectID: 1},
@@ -66,7 +76,7 @@ func TestCopy(t *testing.T) {
 		},
 		{
 			name: "pool",
-			allocation: asPool(newAllocationFromTokens(tokens{
+			allocation: asPool(newAllocation(defaultAddr, tokens{
 				{TokenID: 1, ProjectID: 0},
 				{TokenID: 2, ProjectID: 0},
 				{TokenID: 3, ProjectID: 1},
@@ -83,7 +93,7 @@ func TestCopy(t *testing.T) {
 				t.Errorf("copy diff (+got -want) %v", diff)
 			}
 
-			tmp := newAllocationFromTokens(tokens{
+			tmp := newAllocation(defaultAddr, tokens{
 				{TokenID: -1, ProjectID: 0},
 			})
 			got.swapToken(0, tmp, 0)
@@ -95,29 +105,32 @@ func TestCopy(t *testing.T) {
 }
 
 func TestSwapToken(t *testing.T) {
+	alice := common.HexToAddress("0xa11ce")
+	bob := common.HexToAddress("0xb0b")
+
 	tests := []struct {
 		a, b         *allocation
 		ia, ib       int
 		wantA, wantB *allocation
 	}{
 		{
-			a: newAllocationFromTokens(tokens{
+			a: newAllocation(alice, tokens{
 				{TokenID: 1, ProjectID: 0},
 				{TokenID: 2, ProjectID: 0},
 				{TokenID: 3, ProjectID: 1},
 			}),
-			b: newAllocationFromTokens(tokens{
+			b: newAllocation(bob, tokens{
 				{TokenID: 4, ProjectID: 2},
 			}),
 			ia: 1,
 			ib: 0,
-			wantA: newAllocationFromTokens(tokens{
+			wantA: newAllocation(alice, tokens{
 				{TokenID: 1, ProjectID: 0},
 				{TokenID: 4, ProjectID: 2},
 				{TokenID: 3, ProjectID: 1},
 			}),
 
-			wantB: newAllocationFromTokens(tokens{
+			wantB: newAllocation(bob, tokens{
 				{TokenID: 2, ProjectID: 0},
 			}),
 		},
@@ -142,53 +155,114 @@ func TestSwapToken(t *testing.T) {
 func TestScore(t *testing.T) {
 	tests := []struct {
 		name             string
-		initial, current map[int]int
+		initial, current tokens
 		isPool           bool
 		want             float64
 	}{
 		{
-			name:    "same project ID",
-			initial: map[int]int{1: 0, 2: 0, 3: 1}, // [2, 1, 0]
-			current: map[int]int{4: 0, 5: 1, 6: 2}, // [1, 1, 1]
-			want:    -3 - 2 - 0,                    // - regularisation - projectIdPenalty - tokenIdPenalty
+			name: "same project ID",
+			// [2, 1, 0] = numPerProjects
+			initial: tokens{
+				{TokenID: 1, ProjectID: 0},
+				{TokenID: 2, ProjectID: 0},
+				{TokenID: 3, ProjectID: 1},
+			},
+			// [1, 1, 1]
+			current: tokens{
+				{TokenID: 4, ProjectID: 0},
+				{TokenID: 5, ProjectID: 1},
+				{TokenID: 6, ProjectID: 2},
+			},
+			// - regularisation - projectIdPenalty - tokenIdPenalty
+			want: -3 - 2 - 0,
 		},
 		{
-			name:    "same tokenId ID",
-			initial: map[int]int{1: 0, 2: 0, 3: 1}, // [2, 1, 0]
-			current: map[int]int{1: 0, 3: 1, 6: 2}, // [1, 1, 1]
-			want:    -3 - 2 - 2,
+			name: "same tokenId ID",
+			// [2, 1, 0]
+			initial: tokens{
+				{TokenID: 1, ProjectID: 0},
+				{TokenID: 2, ProjectID: 0},
+				{TokenID: 3, ProjectID: 1},
+			},
+			// [1, 1, 1]
+			current: tokens{
+				{TokenID: 1, ProjectID: 0},
+				{TokenID: 3, ProjectID: 1},
+				{TokenID: 6, ProjectID: 2},
+			},
+			want: -3 - 2 - 2,
 		},
 		{
-			name:    "duplicate projectIDs",
-			initial: map[int]int{1: 0, 2: 0, 3: 1}, // [2, 1, 0]
-			current: map[int]int{4: 2, 5: 2, 6: 2}, // [0, 0, 3]
-			want:    -9 - 0 - 0,
+			name: "duplicate projectIDs",
+			// [2, 1, 0]
+			initial: tokens{
+				{TokenID: 1, ProjectID: 0},
+				{TokenID: 2, ProjectID: 0},
+				{TokenID: 3, ProjectID: 1},
+			},
+			// [0, 0, 3]
+			current: tokens{
+				{TokenID: 4, ProjectID: 2},
+				{TokenID: 5, ProjectID: 2},
+				{TokenID: 6, ProjectID: 2},
+			},
+			want: -9 - 0 - 0,
 		},
 		{
-			name:    "mixed",
-			initial: map[int]int{1: 0, 2: 0, 3: 1}, // [2, 1, 0]
-			current: map[int]int{4: 2, 5: 0, 6: 2}, // [1, 0, 2]
-			want:    -5 - 1 - 0,
+			name: "mixed",
+			// [2, 1, 0]
+			initial: tokens{
+				{TokenID: 1, ProjectID: 0},
+				{TokenID: 2, ProjectID: 0},
+				{TokenID: 3, ProjectID: 1},
+			},
+			// [1, 0, 2]
+			current: tokens{
+				{TokenID: 4, ProjectID: 2},
+				{TokenID: 5, ProjectID: 0},
+				{TokenID: 6, ProjectID: 2},
+			},
+			want: -5 - 1 - 0,
 		},
 		{
-			name:    "mixed",
-			initial: map[int]int{1: 0, 2: 1, 3: 2}, // [1, 1, 1]
-			current: map[int]int{4: 0, 2: 1, 6: 2}, // [1, 1, 1]
-			want:    -3 - 3 - 1,
+			name: "mixed",
+			// [1, 1, 1]
+			initial: tokens{
+				{TokenID: 1, ProjectID: 0},
+				{TokenID: 2, ProjectID: 1},
+				{TokenID: 3, ProjectID: 2},
+			},
+			// [1, 1, 1]
+			current: tokens{
+				{TokenID: 4, ProjectID: 0},
+				{TokenID: 2, ProjectID: 1},
+				{TokenID: 6, ProjectID: 2},
+			},
+			want: -3 - 3 - 1,
 		},
 		{
-			name:    "pool",
-			initial: map[int]int{1: 0, 2: 1, 3: 2}, // [1, 1, 1]
-			current: map[int]int{4: 0, 2: 1, 6: 2}, // [1, 1, 1]
-			isPool:  true,
-			want:    0,
+			name: "pool",
+			// [1, 1, 1]
+			initial: tokens{
+				{TokenID: 1, ProjectID: 0},
+				{TokenID: 2, ProjectID: 1},
+				{TokenID: 3, ProjectID: 2},
+			},
+			// [1, 1, 1]
+			current: tokens{
+				{TokenID: 4, ProjectID: 0},
+				{TokenID: 2, ProjectID: 1},
+				{TokenID: 6, ProjectID: 2},
+			},
+			isPool: true,
+			want:   0,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			initial := newAllocationFromTokenMap(tt.initial)
-			current := newAllocationFromTokenMap(tt.current)
+			initial := newAllocation(defaultAddr, tt.initial)
+			current := newAllocation(defaultAddr, tt.current)
 			current.isPool = tt.isPool
 
 			if got := current.score(initial); got != tt.want {

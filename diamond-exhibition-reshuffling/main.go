@@ -1,3 +1,5 @@
+// The reshuffling binary takes the tokens submitted to the reshuffling pool and
+// distributes them among the participants optimising for variability.
 package main
 
 import (
@@ -89,7 +91,7 @@ func run(seedHex string) (retErr error) {
 		for _, t := range submissions[s] {
 			ts = append(ts, token{TokenID: t, ProjectID: airdrops[t].ProjectId})
 		}
-		initial = append(initial, newAllocation(ts))
+		initial = append(initial, newAllocation(s, ts))
 	}
 
 	// Sanity checks
@@ -113,7 +115,7 @@ func run(seedHex string) (retErr error) {
 		return fmt.Errorf("%T.printStats(): %v", state, err)
 	}
 
-	if state, _, err = state.anneal(0.99999, true); err != nil {
+	if state, _, err = state.anneal(0.999999, true); err != nil {
 		return fmt.Errorf("%T.anneal(): %v", state, err)
 	}
 
@@ -121,18 +123,38 @@ func run(seedHex string) (retErr error) {
 		return fmt.Errorf("%T.printStats(): %v", state, err)
 	}
 
-	f, err := os.Create("reallocation.txt")
-	if err != nil {
-		return fmt.Errorf("os.Create(): %v", err)
-	}
-	defer func() {
-		if err := f.Close(); err != nil && retErr == nil {
-			retErr = fmt.Errorf("f.Close(): %v", err)
+	{
+		f, err := os.Create("overview.txt")
+		if err != nil {
+			return fmt.Errorf("os.Create(): %v", err)
 		}
-	}()
+		defer func() {
+			if err := f.Close(); err != nil && retErr == nil {
+				retErr = fmt.Errorf("f.Close(): %v", err)
+			}
+		}()
+		if err := state.printReallocationOverview(f); err != nil {
+			return fmt.Errorf("%T.printReallocationOverview(): %v", state, err)
+		}
+	}
 
-	if err := state.printReallocation(f); err != nil {
-		return fmt.Errorf("%T.printReallocation(): %v", state, err)
+	{
+		f, err := os.Create(fmt.Sprintf("reallocations_%s.csv", seedHex))
+		if err != nil {
+			return fmt.Errorf("os.Create(): %v", err)
+		}
+		defer func() {
+			if err := f.Close(); err != nil && retErr == nil {
+				retErr = fmt.Errorf("f.Close(): %v", err)
+			}
+		}()
+		if err := state.current.print(f); err != nil {
+			return fmt.Errorf("%T.printReallocations(): %v", state, err)
+		}
+	}
+
+	if !state.isTrivialOptimum() {
+		return fmt.Errorf("final state is not a trivial optimum")
 	}
 
 	return nil

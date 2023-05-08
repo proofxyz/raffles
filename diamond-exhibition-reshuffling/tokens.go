@@ -109,12 +109,3 @@ func newTokensFromProjects(projectIds []int) tokens {
 	}
 	return ts
 }
-
-// newTokensFromTokenMap creates a new token list from a map of token ids to project ids.
-func newTokensFromTokenMap(tmap map[int]int) tokens {
-	var ts tokens
-	for t, p := range tmap {
-		ts = append(ts, token{t, p})
-	}
-	return ts
-}

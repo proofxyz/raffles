@@ -6,10 +6,14 @@ import (
 	"time"
 )
 
+func newAllocationFromProjectIds(xs []int) *allocation {
+	return newAllocation(defaultAddr, newTokensFromProjects(xs))
+}
+
 func newAllocationsFromProjectIds(xss [][]int) allocations {
 	var allocs allocations
 	for _, xs := range xss {
-		allocs = append(allocs, newAllocationFromProjects(xs))
+		allocs = append(allocs, newAllocationFromProjectIds(xs))
 	}
 	return allocs
 }
@@ -103,8 +107,8 @@ func TestAnnealStats(t *testing.T) {
 		{
 			name: "inbalanced",
 			allocations: allocations{
-				newAllocationFromProjects([]int{0, 0, 0, 0, 0}),
-				newAllocationFromProjects([]int{1, 2, 3, 4, 5}),
+				newAllocationFromProjectIds([]int{0, 0, 0, 0, 0}),
+				newAllocationFromProjectIds([]int{1, 2, 3, 4, 5}),
 			},
 			annealingFactor:                0.999,
 			wantNumIdenticalTokensReturned: 4, // meaning that 3 tokens were swapped
@@ -112,8 +116,8 @@ func TestAnnealStats(t *testing.T) {
 		{
 			name: "with pool",
 			allocations: allocations{
-				newAllocationFromProjects([]int{0, 0, 0, 0, 0}),
-				asPool(newAllocationFromProjects([]int{1, 2, 3, 4, 5})),
+				newAllocationFromProjectIds([]int{0, 0, 0, 0, 0}),
+				asPool(newAllocationFromProjectIds([]int{1, 2, 3, 4, 5})),
 			},
 			annealingFactor:                0.999,
 			wantNumIdenticalTokensReturned: 0, // all tokens can be swapped since the pool does not care
@@ -149,7 +153,7 @@ func TestAnnealStats(t *testing.T) {
 					seen[v.TokenID] = struct{}{}
 				}
 
-				numIdenticalTokensReturned += c.numIdenticalInitialTokens(s.initial[i])
+				numIdenticalTokensReturned += c.numSameTokenID(s.initial[i].tokens)
 
 				if tt.wantNumPerProject != nil {
 					got := c.numPerProject()

@@ -1,16 +1,26 @@
 package main
 
+import (
+	"fmt"
+	"io"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/gocarina/gocsv"
+)
+
 // allocation is a set of tokens allocated to a participant.
 type allocation struct {
 	tokens                              // the tokens in the allocation
+	owner                common.Address // the owner of the allocation
 	cachedNumPerProjects projectsVector // number of tokens per project, cached for performance
-	isPool               bool           // flag to indicate whether the allocation is the pool (disables the score function)
+	isPool               bool           // flag to indicate whether the allocation is the pool submitted by PROOF (disables the score function)
 }
 
 // newAllocation creates a new allocation from a list of tokens.
-func newAllocation(t tokens) *allocation {
+func newAllocation(addr common.Address, t tokens) *allocation {
 	return &allocation{
 		tokens:               t,
+		owner:                addr,
 		cachedNumPerProjects: t.numPerProject(),
 		isPool:               false,
 	}
@@ -23,8 +33,7 @@ func (a *allocation) numPerProject() projectsVector {
 
 // copy returns a deep copy of the allocation.
 func (a *allocation) copy() *allocation {
-	var c allocation
-	c.isPool = a.isPool
+	c := *a
 	c.tokens = a.tokens.copy()
 	c.cachedNumPerProjects = a.cachedNumPerProjects.copy()
 	return &c
@@ -33,6 +42,8 @@ func (a *allocation) copy() *allocation {
 // score returns a score for the current allocation, where higher is better.
 func (current *allocation) score(initial *allocation) float64 {
 	if current.isPool {
+		// disabling the score function for the PROOF-issued pool,
+		// because it does not care about the tokens it ends up with
 		return 0
 	}
 
@@ -40,9 +51,9 @@ func (current *allocation) score(initial *allocation) float64 {
 	i := initial.numPerProject()
 
 	var s int
-	s -= c.smul(c)                                     // regularisation term to penalise getting duplicate projects
-	s -= c.smul(i.mask())                              // penalise getting tokens from the initial projects back
-	s -= current.tokens.numSameTokenID(initial.tokens) // penalise getting the initial token ids back
+	s -= c.smul(c)                                     // (1) regularisation term to penalise getting duplicate projects
+	s -= c.smul(i.mask())                              // (2) penalise getting tokens from the initial projects back
+	s -= current.tokens.numSameTokenID(initial.tokens) // (3) penalise getting the initial token ids back
 	return float64(s)
 }
 
@@ -120,4 +131,31 @@ func (as allocations) duplicateTokenIDs() []int {
 		}
 	}
 	return dupes
+}
+
+// print prints allocations as CSV, each row containing an address and assigned token id plus corresponding project id.
+func (as allocations) print(w io.Writer) error {
+	type Transfer struct {
+		Addr      common.Address
+		TokenId   int
+		ProjectId int
+	}
+
+	var transfers []Transfer
+	for _, a := range as {
+		for _, token := range a.tokens {
+			transfers = append(transfers, Transfer{
+				Addr:      a.owner,
+				TokenId:   token.TokenID,
+				ProjectId: token.ProjectID,
+			})
+
+		}
+	}
+
+	if err := gocsv.Marshal(transfers, w); err != nil {
+		return fmt.Errorf("gocsv.Marshal(%T, %T): %v", transfers, w, err)
+	}
+
+	return nil
 }
