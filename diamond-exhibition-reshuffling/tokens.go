@@ -92,6 +92,17 @@ func (ts tokens) numInDuplicateProjects() int {
 	return n
 }
 
+// numGrails returns the number of grail tokens with the given allocation.
+func (ts tokens) numGrails() int {
+	ns := ts.numPerProject()
+	var n int
+	n += ns[11]
+	n += ns[17]
+	n += ns[19]
+
+	return n
+}
+
 // drawTokenIdx draws a random token index from the allocation.
 func (ts tokens) drawTokenIdx(src rand.Source) int {
 	return rand.New(src).Intn(ts.numTokens())

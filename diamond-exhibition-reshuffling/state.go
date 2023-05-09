@@ -133,6 +133,7 @@ func (s *state) anneal(annealingFactor float64, verbose bool) (*state, *hego.SAR
 	return finalState, &result, nil
 }
 
+// computeStats computes statistics about the current state ignoring the PROOF-issued pool.
 func (s *state) computeStats() (numInitTokensTotal, numInInitProjsTotal, numInDupeProjsTotal int) {
 	for i, current := range s.current {
 		if current.isPool {
@@ -168,17 +169,14 @@ func (s *state) printStats(w io.Writer) error {
 func (s *state) printReallocationOverview(w io.Writer) error {
 	for i, current := range s.current {
 		initial := s.initial[i]
-		numInitTokens := current.numSameTokenID(initial.tokens)
-		numInInitProjs := current.numInSameProjects(initial.tokens)
-		numInDupeProjs := current.numInDuplicateProjects()
-
-		_, err := fmt.Fprintf(w, "%v -> %v: var=%.3f, numInitTokens=%d, numInInitProjs=%d, numInDupeProjs=%d\n",
+		_, err := fmt.Fprintf(w, "%v -> %v: var=%.3f, numInitTokens=%d, numInInitProjs=%d, numInDupeProjs=%d, numGrails=%d\n",
 			initial.numPerProject(),
 			current.numPerProject(),
 			current.variability(),
-			numInitTokens,
-			numInInitProjs,
-			numInDupeProjs,
+			current.numSameTokenID(initial.tokens),
+			current.numInSameProjects(initial.tokens),
+			current.numInDuplicateProjects(),
+			current.numGrails(),
 		)
 		if err != nil {
 			return err

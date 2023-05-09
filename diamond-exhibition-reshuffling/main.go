@@ -124,7 +124,7 @@ func run(seedHex string) (retErr error) {
 	}
 
 	{
-		f, err := os.Create("overview.txt")
+		f, err := os.Create(fmt.Sprintf("overview_%s.csv", seedHex))
 		if err != nil {
 			return fmt.Errorf("os.Create(): %v", err)
 		}
@@ -157,18 +157,26 @@ func run(seedHex string) (retErr error) {
 		return fmt.Errorf("final state is not a trivial optimum")
 	}
 
+	for _, t := range state.current {
+		if t.numGrails() > 0 {
+			fmt.Printf("%v numTokens=%d, numGrails=%d\n", t.owner.Hex(), t.numTokens(), t.numGrails())
+		}
+	}
+
 	return nil
 }
 
 // foldSeed treats seedHex as a uint256, returning the xor of the 4 uint64s,
 // treating the raw bits as in int64 for use in a rand.Source.
 func foldSeed(seedHex string) (int64, error) {
-	if !strings.HasPrefix(seedHex, "0x") {
-		seedHex = fmt.Sprintf("0x%s", seedHex)
-	}
-	if len(seedHex) > 2+64 {
+	seedHex = strings.TrimLeft(seedHex, "0x")
+
+	if len(seedHex) > 64 {
 		return 0, fmt.Errorf("hex seed %q longer than 256 bits", seedHex)
 	}
+
+	seedHex = strings.TrimLeft(seedHex, "0")
+	seedHex = fmt.Sprintf("0x%s", seedHex)
 
 	int, err := uint256.FromHex(seedHex)
 	if err != nil {

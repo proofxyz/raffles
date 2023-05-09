@@ -43,8 +43,9 @@ func (a *allocation) copy() *allocation {
 func (current *allocation) score(initial *allocation) float64 {
 	if current.isPool {
 		// disabling the score function for the PROOF-issued pool,
-		// because it does not care about the tokens it ends up with
-		return 0
+		// because it does not care about the tokens it ends up with.
+		// Returning the theoretical maximum score for consistency.
+		return -float64(current.numTokens())
 	}
 
 	c := current.numPerProject()
