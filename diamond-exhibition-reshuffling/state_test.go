@@ -1,10 +1,23 @@
 package main
 
 import (
+	"fmt"
 	"math/rand"
 	"testing"
-	"time"
 )
+
+// nextFakeTokenId is a counter used to generate fake token ids.
+var nextFakeTokenId int
+
+// newTokensFromProjects creates a new token list from a slice of project ids using sequential, fake token ids starting from 0.
+func newTokensFromProjects(projectIds []int) tokens {
+	var ts tokens
+	for _, p := range projectIds {
+		ts = append(ts, token{TokenID: nextFakeTokenId, ProjectID: p})
+		nextFakeTokenId++
+	}
+	return ts
+}
 
 func newAllocationFromProjectIds(xs []int) *allocation {
 	return newAllocation(defaultAddr, newTokensFromProjects(xs))
@@ -19,8 +32,6 @@ func newAllocationsFromProjectIds(xss [][]int) allocations {
 }
 
 func TestAnnealStats(t *testing.T) {
-	src := rand.NewSource(time.Now().UnixNano())
-
 	tests := []struct {
 		name                           string
 		allocations                    allocations
@@ -130,46 +141,49 @@ func TestAnnealStats(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s, _, err := newState(tt.allocations, src).anneal(tt.annealingFactor, false)
-			if err != nil {
-				t.Errorf("anneal(): err %v", err)
-			}
-
-			seen := make(map[int]struct{})
-			var (
-				numIdenticalTokensReturned int
-			)
-
-			for i, c := range s.current {
-				if len(c.tokens) != len(s.initial[i].tokens) {
-					t.Errorf("len(current[%d].tokens) = %d, want %d", i, len(c.tokens), len(s.initial[i].tokens))
-				}
-
-				for _, v := range c.tokens {
-					// Sanity check for duplicate tokens
-					if _, ok := seen[v.TokenID]; ok {
-						t.Errorf("duplicate tokenId %d", v.TokenID)
+			for seed := int64(0); seed < 10; seed++ {
+				t.Run(fmt.Sprintf("random seed %d", seed), func(t *testing.T) {
+					s, err := newState(tt.allocations, rand.New(rand.NewSource(seed))).anneal(tt.annealingFactor, false)
+					if err != nil {
+						t.Errorf("anneal(): err %v", err)
 					}
-					seen[v.TokenID] = struct{}{}
-				}
 
-				numIdenticalTokensReturned += c.numSameTokenID(s.initial[i].tokens)
+					seen := make(map[int]struct{})
+					var (
+						numIdenticalTokensReturned int
+					)
 
-				if tt.wantNumPerProject != nil {
-					got := c.numPerProject()
-					want := tt.wantNumPerProject[i]
-					for projectId, num := range got {
-						if num != want[projectId] {
-							t.Errorf("allocation[%d].NumPerProject(projectId %d): got %d, want %d", i, projectId, num, want[projectId])
+					for i, c := range s.current {
+						if len(c.tokens) != len(s.initial[i].tokens) {
+							t.Errorf("len(current[%d].tokens) = %d, want %d", i, len(c.tokens), len(s.initial[i].tokens))
+						}
+
+						for _, v := range c.tokens {
+							// Sanity check for duplicate tokens
+							if _, ok := seen[v.TokenID]; ok {
+								t.Errorf("duplicate tokenId %d", v.TokenID)
+							}
+							seen[v.TokenID] = struct{}{}
+						}
+
+						numIdenticalTokensReturned += c.numSameTokenID(s.initial[i].tokens)
+
+						if tt.wantNumPerProject != nil {
+							got := c.numPerProject()
+							want := tt.wantNumPerProject[i]
+							for projectId, num := range got {
+								if num != want[projectId] {
+									t.Errorf("allocation[%d].NumPerProject(projectId %d): got %d, want %d", i, projectId, num, want[projectId])
+								}
+							}
 						}
 					}
-				}
-			}
 
-			if numIdenticalTokensReturned != tt.wantNumIdenticalTokensReturned {
-				t.Errorf("numIdenticalTokensReturned = %d, want = %d", numIdenticalTokensReturned, tt.wantNumIdenticalTokensReturned)
+					if numIdenticalTokensReturned != tt.wantNumIdenticalTokensReturned {
+						t.Errorf("numIdenticalTokensReturned = %d, want = %d", numIdenticalTokensReturned, tt.wantNumIdenticalTokensReturned)
+					}
+				})
 			}
-
 		})
 	}
 

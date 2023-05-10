@@ -96,7 +96,7 @@ func TestCopy(t *testing.T) {
 			tmp := newAllocation(defaultAddr, tokens{
 				{TokenID: -1, ProjectID: 0},
 			})
-			got.swapToken(0, tmp, 0)
+			got.swapToken(tmp, 0, 0)
 			if cmp.Equal(tt.allocation, got, cmpopt) {
 				t.Errorf("the copy (%+v) is still equal to the input (%+v) after swapping a token. Shallow copy?", got, tt.allocation)
 			}
@@ -138,7 +138,7 @@ func TestSwapToken(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run("", func(t *testing.T) {
-			tt.a.swapToken(tt.ia, tt.b, tt.ib)
+			tt.a.swapToken(tt.b, tt.ia, tt.ib)
 			cmpopt := cmp.AllowUnexported(allocation{})
 
 			if diff := cmp.Diff(tt.wantA, tt.a, cmpopt); diff != "" {
@@ -255,7 +255,7 @@ func TestScore(t *testing.T) {
 				{TokenID: 6, ProjectID: 2},
 			},
 			isPool: true,
-			want:   0,
+			want:   -3,
 		},
 	}
 

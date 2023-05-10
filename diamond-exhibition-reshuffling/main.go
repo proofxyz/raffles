@@ -11,11 +11,11 @@ import (
 	"strings"
 	"unsafe"
 
-	_ "embed"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gocarina/gocsv"
 	"github.com/holiman/uint256"
+
+	_ "embed"
 )
 
 //go:embed airdrops.csv
@@ -49,7 +49,7 @@ func main() {
 	}
 }
 
-func run(seedHex string) (retErr error) {
+func run(seedHex string) error {
 	// Load data
 	airdrops := make(map[int]Airdrop)
 	{
@@ -109,13 +109,13 @@ func run(seedHex string) (retErr error) {
 		return fmt.Errorf("foldSeed(%q): %v", seedHex, err)
 	}
 
-	state := newState(initial, rand.NewSource(seed))
+	state := newState(initial, rand.New(rand.NewSource(seed)))
 
 	if err := state.printStats(os.Stderr); err != nil {
 		return fmt.Errorf("%T.printStats(): %v", state, err)
 	}
 
-	if state, _, err = state.anneal(0.999999, true); err != nil {
+	if state, err = state.anneal(0.999999, true); err != nil {
 		return fmt.Errorf("%T.anneal(): %v", state, err)
 	}
 
@@ -128,13 +128,11 @@ func run(seedHex string) (retErr error) {
 		if err != nil {
 			return fmt.Errorf("os.Create(): %v", err)
 		}
-		defer func() {
-			if err := f.Close(); err != nil && retErr == nil {
-				retErr = fmt.Errorf("f.Close(): %v", err)
-			}
-		}()
 		if err := state.printReallocationOverview(f); err != nil {
 			return fmt.Errorf("%T.printReallocationOverview(): %v", state, err)
+		}
+		if err := f.Close(); err != nil {
+			return fmt.Errorf("f.Close(): %v", err)
 		}
 	}
 
@@ -143,13 +141,11 @@ func run(seedHex string) (retErr error) {
 		if err != nil {
 			return fmt.Errorf("os.Create(): %v", err)
 		}
-		defer func() {
-			if err := f.Close(); err != nil && retErr == nil {
-				retErr = fmt.Errorf("f.Close(): %v", err)
-			}
-		}()
-		if err := state.current.print(f); err != nil {
+		if err := state.current.writeCSV(f); err != nil {
 			return fmt.Errorf("%T.printReallocations(): %v", state, err)
+		}
+		if err := f.Close(); err != nil {
+			return fmt.Errorf("f.Close(): %v", err)
 		}
 	}
 
@@ -178,13 +174,13 @@ func foldSeed(seedHex string) (int64, error) {
 	seedHex = strings.TrimLeft(seedHex, "0")
 	seedHex = fmt.Sprintf("0x%s", seedHex)
 
-	int, err := uint256.FromHex(seedHex)
+	ui, err := uint256.FromHex(seedHex)
 	if err != nil {
 		return 0, fmt.Errorf("uint256.FromHex(seed = %q): %v", seedHex, err)
 	}
 
 	var seed uint64
-	for _, u := range ([4]uint64)(*int) {
+	for _, u := range ([4]uint64)(*ui) {
 		seed ^= u
 	}
 	return *(*int64)(unsafe.Pointer(&seed)), nil

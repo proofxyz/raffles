@@ -7,7 +7,7 @@ type token struct {
 	ProjectID int
 }
 
-// tokens is a list of tokens.
+// tokens is a slice of token structs, typically used to represent an allocation to a single address.
 type tokens []token
 
 // copy returns a deep copy of the token list.
@@ -22,7 +22,7 @@ func (ts tokens) numTokens() int {
 	return len(ts)
 }
 
-// numDistinct returns the number of distinct projects in the allocation.
+// numProjects returns the number of distinct projects in the allocation.
 func (ts tokens) numProjects() int {
 	var n int
 	for _, x := range ts.numPerProject() {
@@ -65,7 +65,7 @@ func (ts tokens) numSameTokenID(other tokens) int {
 	return num
 }
 
-// numSameProjects returns the number of tokens whose projects are also present in the other allocation.
+// numInSameProjects returns the number of tokens whose projects are also present in the other allocation.
 func (ts tokens) numInSameProjects(other tokens) int {
 	o := other.numPerProject()
 
@@ -104,19 +104,6 @@ func (ts tokens) numGrails() int {
 }
 
 // drawTokenIdx draws a random token index from the allocation.
-func (ts tokens) drawTokenIdx(src rand.Source) int {
-	return rand.New(src).Intn(ts.numTokens())
-}
-
-// nextFakeTokenId is a counter used to generate fake token ids.
-var nextFakeTokenId int
-
-// newTokensFromProjects creates a new token list from a slice of project ids using sequential, fake token ids starting from 0.
-func newTokensFromProjects(projectIds []int) tokens {
-	var ts tokens
-	for _, p := range projectIds {
-		ts = append(ts, token{nextFakeTokenId, p})
-		nextFakeTokenId++
-	}
-	return ts
+func (ts tokens) drawTokenIdx(rng *rand.Rand) int {
+	return rng.Intn(ts.numTokens())
 }

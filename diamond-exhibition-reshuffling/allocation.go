@@ -40,33 +40,31 @@ func (a *allocation) copy() *allocation {
 }
 
 // score returns a score for the current allocation, where higher is better.
-func (current *allocation) score(initial *allocation) float64 {
-	if current.isPool {
+func (a *allocation) score(initial *allocation) float64 {
+	if a.isPool {
 		// disabling the score function for the PROOF-issued pool,
 		// because it does not care about the tokens it ends up with.
 		// Returning the theoretical maximum score for consistency.
-		return -float64(current.numTokens())
+		return -float64(a.numTokens())
 	}
 
-	c := current.numPerProject()
-	i := initial.numPerProject()
-
+	n := a.numPerProject()
 	var s int
-	s -= c.smul(c)                                     // (1) regularisation term to penalise getting duplicate projects
-	s -= c.smul(i.mask())                              // (2) penalise getting tokens from the initial projects back
-	s -= current.tokens.numSameTokenID(initial.tokens) // (3) penalise getting the initial token ids back
+	s -= n.smul(n)                                // (1) regularisation term to penalise getting duplicate projects
+	s -= n.smul(initial.numPerProject().asMask()) // (2) penalise getting tokens from the initial projects back
+	s -= a.tokens.numSameTokenID(initial.tokens)  // (3) penalise getting the initial token ids back
 	return float64(s)
 }
 
-func (a *allocation) swapToken(ia int, b *allocation, ib int) {
+func (a *allocation) swapToken(b *allocation, ia int, ib int) {
 	// update cached number of tokens per project directly for performance
-	projectIdA := a.tokens[ia].ProjectID
-	a.cachedNumPerProjects[projectIdA]--
-	b.cachedNumPerProjects[projectIdA]++
+	pA := a.tokens[ia].ProjectID
+	a.cachedNumPerProjects[pA]--
+	b.cachedNumPerProjects[pA]++
 
-	projectIdB := b.tokens[ib].ProjectID
-	b.cachedNumPerProjects[projectIdB]--
-	a.cachedNumPerProjects[projectIdB]++
+	pB := b.tokens[ib].ProjectID
+	b.cachedNumPerProjects[pB]--
+	a.cachedNumPerProjects[pB]++
 
 	a.tokens[ia], b.tokens[ib] = b.tokens[ib], a.tokens[ia]
 }
@@ -76,10 +74,10 @@ func (a *allocation) swapToken(ia int, b *allocation, ib int) {
 type allocations []*allocation
 
 // copyShallow returns a shallow copy of the allocations.
-func (a allocations) copyShallow() allocations {
-	c := make(allocations, len(a))
-	copy(c, a)
-	return c
+func (as allocations) copyShallow() allocations {
+	cp := make(allocations, len(as))
+	copy(cp, as)
+	return cp
 }
 
 // numTokens computes the total number of tokens in a slice of allocations.
@@ -101,41 +99,41 @@ func (as allocations) numPerProject() projectsVector {
 }
 
 // score computes the sum of the scores of a slice of allocations.
-func (current allocations) score(initial allocations) float64 {
+func (as allocations) score(initial allocations) float64 {
 	var res float64
-	for i, c := range current {
-		res += c.score(initial[i])
+	for i, a := range as {
+		res += a.score(initial[i])
 	}
 	return res
 }
 
 // avgVariability computes the average variability of a slice of allocations.
-func (a allocations) avgVariability() float64 {
+func (as allocations) avgVariability() float64 {
 	var res float64
-	for _, x := range a {
-		res += x.variability()
+	for _, a := range as {
+		res += a.variability()
 	}
-	return res / float64(len(a))
+	return res / float64(len(as))
 }
 
 // duplicateTokenIDs returns a list of token ids that are present more than once
 func (as allocations) duplicateTokenIDs() []int {
-	tokenIDs := make(map[int]struct{})
+	tokenIDs := make(map[int]bool)
 	var dupes []int
 
 	for _, a := range as {
 		for _, t := range a.tokens {
-			if _, ok := tokenIDs[t.TokenID]; ok {
+			if tokenIDs[t.TokenID] {
 				dupes = append(dupes, t.TokenID)
 			}
-			tokenIDs[t.TokenID] = struct{}{}
+			tokenIDs[t.TokenID] = true
 		}
 	}
 	return dupes
 }
 
-// print prints allocations as CSV, each row containing an address and assigned token id plus corresponding project id.
-func (as allocations) print(w io.Writer) error {
+// writeCSV writes the allocations as CSV, each row containing an address and assigned token id plus corresponding project id.
+func (as allocations) writeCSV(w io.Writer) error {
 	type Transfer struct {
 		Addr      common.Address
 		TokenId   int
@@ -157,6 +155,5 @@ func (as allocations) print(w io.Writer) error {
 	if err := gocsv.Marshal(transfers, w); err != nil {
 		return fmt.Errorf("gocsv.Marshal(%T, %T): %v", transfers, w, err)
 	}
-
 	return nil
 }
