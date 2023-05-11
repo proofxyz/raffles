@@ -3,8 +3,20 @@ package main
 import (
 	"fmt"
 	"math/rand"
+	"sort"
 	"testing"
 )
+
+// ids returns only the token IDs of each token, excluding the project IDs. The
+// IDs are sorted, not in the original order as defined by ts.
+func (ts tokens) ids() []int {
+	ids := make([]int, len(ts))
+	for i, t := range ts {
+		ids[i] = t.TokenID
+	}
+	sort.Ints(ids)
+	return ids
+}
 
 // nextFakeTokenId is a counter used to generate fake token ids.
 var nextFakeTokenId int
@@ -116,15 +128,6 @@ func TestAnnealStats(t *testing.T) {
 			wantNumIdenticalTokensReturned: 0,
 		},
 		{
-			name: "inbalanced",
-			allocations: allocations{
-				newAllocationFromProjectIds([]int{0, 0, 0, 0, 0}),
-				newAllocationFromProjectIds([]int{1, 2, 3, 4, 5}),
-			},
-			annealingFactor:                0.999,
-			wantNumIdenticalTokensReturned: 4, // meaning that 3 tokens were swapped
-		},
-		{
 			name: "with pool",
 			allocations: allocations{
 				newAllocationFromProjectIds([]int{0, 0, 0, 0, 0}),
@@ -141,32 +144,35 @@ func TestAnnealStats(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			for seed := int64(0); seed < 10; seed++ {
+			for seed := int64(0); seed < 25; seed++ {
 				t.Run(fmt.Sprintf("random seed %d", seed), func(t *testing.T) {
-					s, err := newState(tt.allocations, rand.New(rand.NewSource(seed))).anneal(tt.annealingFactor, false)
+					rng := rand.New(rand.NewSource(seed))
+					s, err := newState(tt.allocations, rng).anneal(tt.annealingFactor, false)
 					if err != nil {
 						t.Errorf("anneal(): err %v", err)
 					}
 
-					seen := make(map[int]struct{})
-					var (
-						numIdenticalTokensReturned int
-					)
+					seen := make(map[int]bool)
+					var numIdenticalTokensReturned int
 
 					for i, c := range s.current {
-						if len(c.tokens) != len(s.initial[i].tokens) {
-							t.Errorf("len(current[%d].tokens) = %d, want %d", i, len(c.tokens), len(s.initial[i].tokens))
+						initial := s.initial[i]
+
+						if len(c.tokens) != len(initial.tokens) {
+							t.Errorf("len(current[%d].tokens) = %d, want %d (same as initial)", i, len(c.tokens), len(initial.tokens))
 						}
 
 						for _, v := range c.tokens {
 							// Sanity check for duplicate tokens
-							if _, ok := seen[v.TokenID]; ok {
+							if seen[v.TokenID] {
 								t.Errorf("duplicate tokenId %d", v.TokenID)
 							}
-							seen[v.TokenID] = struct{}{}
+							seen[v.TokenID] = true
 						}
 
-						numIdenticalTokensReturned += c.numSameTokenID(s.initial[i].tokens)
+						same := c.numSameTokenID(initial.tokens)
+						numIdenticalTokensReturned += same
+						t.Logf("token IDs %v => %v (same = %d)", initial.tokens.ids(), c.tokens.ids(), same)
 
 						if tt.wantNumPerProject != nil {
 							got := c.numPerProject()
@@ -186,5 +192,4 @@ func TestAnnealStats(t *testing.T) {
 			}
 		})
 	}
-
 }

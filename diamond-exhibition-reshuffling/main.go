@@ -13,6 +13,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gocarina/gocsv"
+	"github.com/golang/glog"
 	"github.com/holiman/uint256"
 
 	_ "embed"
@@ -35,17 +36,12 @@ type Transfer struct {
 	TokenId int            `csv:"TokenId"`
 }
 
-func stderr(format string, a ...interface{}) {
-	fmt.Fprintf(os.Stderr, format, a...)
-}
-
 func main() {
-	seedHex := flag.String("seed_hex", "0", "Hexadecimal seed; at most 256 bits.")
+	seedHex := flag.String("seed_hex", fmt.Sprintf("%#x", [32]byte{}), "Hexadecimal seed; at most 256 bits.")
 	flag.Parse()
 
 	if err := run(*seedHex); err != nil {
-		stderr("%v\n", err)
-		os.Exit(1)
+		glog.Exit(err)
 	}
 }
 
@@ -68,7 +64,7 @@ func run(seedHex string) error {
 
 		for _, v := range transfers {
 			if v.From != airdrops[v.TokenId].Receiver {
-				stderr("Rejecting token %d: from=%v, receiver=%v\n", v.TokenId, v.From, airdrops[v.TokenId].Receiver)
+				glog.Infof("Rejecting token %d: from=%v, receiver=%v\n", v.TokenId, v.From, airdrops[v.TokenId].Receiver)
 				continue
 			}
 			submissions[v.From] = append(submissions[v.From], v.TokenId)
@@ -100,9 +96,9 @@ func run(seedHex string) error {
 		return fmt.Errorf("not all tokens unique: %v", dupes)
 	}
 
-	fmt.Printf("numSubmitters=%d, numTokens=%d\n", len(submitters), initial.numTokens())
-	fmt.Println(initial.numPerProject())
-	fmt.Printf("%.2f\n", initial.numPerProject().normalised())
+	glog.Infof("numSubmitters=%d, numTokens=%d", len(submitters), initial.numTokens())
+	glog.Infof("Number per project: %v", initial.numPerProject())
+	glog.Infof("Proportion per project: %.2f", initial.numPerProject().normalised())
 
 	seed, err := foldSeed(seedHex)
 	if err != nil {
@@ -155,7 +151,7 @@ func run(seedHex string) error {
 
 	for _, t := range state.current {
 		if t.numGrails() > 0 {
-			fmt.Printf("%v numTokens=%d, numGrails=%d\n", t.owner.Hex(), t.numTokens(), t.numGrails())
+			glog.Infof("%v numTokens=%d, numGrails=%d", t.owner.Hex(), t.numTokens(), t.numGrails())
 		}
 	}
 
@@ -165,13 +161,16 @@ func run(seedHex string) error {
 // foldSeed treats seedHex as a uint256, returning the xor of the 4 uint64s,
 // treating the raw bits as in int64 for use in a rand.Source.
 func foldSeed(seedHex string) (int64, error) {
-	seedHex = strings.TrimLeft(seedHex, "0x")
+	seedHex = strings.TrimPrefix(seedHex, "0x")
 
 	if len(seedHex) > 64 {
 		return 0, fmt.Errorf("hex seed %q longer than 256 bits", seedHex)
 	}
 
 	seedHex = strings.TrimLeft(seedHex, "0")
+	if seedHex == "" {
+		seedHex = "0"
+	}
 	seedHex = fmt.Sprintf("0x%s", seedHex)
 
 	ui, err := uint256.FromHex(seedHex)
@@ -179,9 +178,12 @@ func foldSeed(seedHex string) (int64, error) {
 		return 0, fmt.Errorf("uint256.FromHex(seed = %q): %v", seedHex, err)
 	}
 
-	var seed uint64
+	var uSeed uint64
 	for _, u := range ([4]uint64)(*ui) {
-		seed ^= u
+		uSeed ^= u
 	}
-	return *(*int64)(unsafe.Pointer(&seed)), nil
+
+	seed := *(*int64)(unsafe.Pointer(&uSeed))
+	glog.Infof("Seed %q folded into %#x", seedHex, seed)
+	return seed, nil
 }

@@ -41,19 +41,30 @@ func (a *allocation) copy() *allocation {
 
 // score returns a score for the current allocation, where higher is better.
 func (a *allocation) score(initial *allocation) float64 {
+	var s int
+	for _, p := range a.scorePenalties(initial) {
+		s -= p
+	}
+	return float64(s)
+}
+
+// scorePenalties returns the individual components that make up an allocation
+// score. The penalties are positive whereas the final score is negative. It is
+// abstracted for more precise testing.
+func (a *allocation) scorePenalties(initial *allocation) [3]int {
 	if a.isPool {
 		// disabling the score function for the PROOF-issued pool,
 		// because it does not care about the tokens it ends up with.
 		// Returning the theoretical maximum score for consistency.
-		return -float64(a.numTokens())
+		return [3]int{a.numTokens(), 0, 0}
 	}
 
 	n := a.numPerProject()
-	var s int
-	s -= n.smul(n)                                // (1) regularisation term to penalise getting duplicate projects
-	s -= n.smul(initial.numPerProject().asMask()) // (2) penalise getting tokens from the initial projects back
-	s -= a.tokens.numSameTokenID(initial.tokens)  // (3) penalise getting the initial token ids back
-	return float64(s)
+	return [3]int{
+		n.smul(n),                                // (1) regularisation term to penalise getting duplicate projects
+		n.smul(initial.numPerProject().asMask()), // (2) penalise getting tokens from the initial projects back
+		a.tokens.numSameTokenID(initial.tokens),  // (3) penalise getting the initial token ids back
+	}
 }
 
 func (a *allocation) swapToken(b *allocation, ia int, ib int) {

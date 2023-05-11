@@ -40,15 +40,15 @@ func TestNewAllocation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := newAllocation(tt.addr, tt.tokens)
 			if diff := cmp.Diff(tt.tokens, got.tokens); diff != "" {
-				t.Errorf("got.tokens diff (+got -want) %v", diff)
+				t.Errorf("newAllocation(…, %+v).tokens diff (+got -want) %s", tt.tokens, diff)
 			}
 
 			if tt.addr != got.owner {
-				t.Errorf("got.owner %v, want %v", got.owner, tt.addr)
+				t.Errorf("newAllocation(%v, …).owner = %v, want %v", tt.addr, got.owner, tt.addr)
 			}
 
 			if diff := cmp.Diff(tt.wantNumPerProjects, got.numPerProject()); diff != "" {
-				t.Errorf("got.numPerProject() diff (+got -want) %v", diff)
+				t.Errorf("newAllocation(…, %+v).numPerProject() diff (+got -want) %v", tt.tokens, diff)
 			}
 		})
 	}
@@ -57,8 +57,9 @@ func TestNewAllocation(t *testing.T) {
 var defaultAddr = common.HexToAddress("0xdeadbeef")
 
 func asPool(a *allocation) *allocation {
-	a.isPool = true
-	return a
+	aa := *a
+	aa.isPool = true
+	return &aa
 }
 
 func TestCopy(t *testing.T) {
@@ -90,7 +91,7 @@ func TestCopy(t *testing.T) {
 			cmpopt := cmp.AllowUnexported(allocation{})
 
 			if diff := cmp.Diff(tt.allocation, got, cmpopt); diff != "" {
-				t.Errorf("copy diff (+got -want) %v", diff)
+				t.Errorf("%T.copy diff (+got -want) %v", tt.allocation, diff)
 			}
 
 			tmp := newAllocation(defaultAddr, tokens{
@@ -98,7 +99,7 @@ func TestCopy(t *testing.T) {
 			})
 			got.swapToken(tmp, 0, 0)
 			if cmp.Equal(tt.allocation, got, cmpopt) {
-				t.Errorf("the copy (%+v) is still equal to the input (%+v) after swapping a token. Shallow copy?", got, tt.allocation)
+				t.Errorf("%T.copy() (%+v) is still equal to the input (%+v) after swapping a token. Shallow copy?", tt.allocation, got, tt.allocation)
 			}
 		})
 	}
@@ -129,9 +130,32 @@ func TestSwapToken(t *testing.T) {
 				{TokenID: 4, ProjectID: 2},
 				{TokenID: 3, ProjectID: 1},
 			}),
-
 			wantB: newAllocation(bob, tokens{
 				{TokenID: 2, ProjectID: 0},
+			}),
+		},
+		{
+			a: newAllocation(alice, tokens{
+				{TokenID: 1, ProjectID: 0},
+				{TokenID: 2, ProjectID: 0},
+				{TokenID: 3, ProjectID: 1},
+			}),
+			b: newAllocation(bob, tokens{
+				{TokenID: 4, ProjectID: 2},
+				{TokenID: 5, ProjectID: 2},
+				{TokenID: 6, ProjectID: 2},
+			}),
+			ia: 0,
+			ib: 1,
+			wantA: newAllocation(alice, tokens{
+				{TokenID: 5, ProjectID: 2},
+				{TokenID: 2, ProjectID: 0},
+				{TokenID: 3, ProjectID: 1},
+			}),
+			wantB: newAllocation(bob, tokens{
+				{TokenID: 4, ProjectID: 2},
+				{TokenID: 1, ProjectID: 0},
+				{TokenID: 6, ProjectID: 2},
 			}),
 		},
 	}
@@ -157,10 +181,11 @@ func TestScore(t *testing.T) {
 		name             string
 		initial, current tokens
 		isPool           bool
+		wantPenalties    [3]int
 		want             float64
 	}{
 		{
-			name: "same project ID",
+			name: "received original project ID 2x",
 			// [2, 1, 0] = numPerProjects
 			initial: tokens{
 				{TokenID: 1, ProjectID: 0},
@@ -174,10 +199,11 @@ func TestScore(t *testing.T) {
 				{TokenID: 6, ProjectID: 2},
 			},
 			// - regularisation - projectIdPenalty - tokenIdPenalty
-			want: -3 - 2 - 0,
+			wantPenalties: [3]int{3, 2, 0},
+			want:          -3 - 2 - 0,
 		},
 		{
-			name: "same tokenId ID",
+			name: "received original token ID 2x",
 			// [2, 1, 0]
 			initial: tokens{
 				{TokenID: 1, ProjectID: 0},
@@ -190,23 +216,52 @@ func TestScore(t *testing.T) {
 				{TokenID: 3, ProjectID: 1},
 				{TokenID: 6, ProjectID: 2},
 			},
-			want: -3 - 2 - 2,
+			wantPenalties: [3]int{3, 2, 2},
+			want:          -3 - 2 - 2,
 		},
 		{
-			name: "duplicate projectIDs",
+			name: "received original token ID 2x (with fake project ID)",
 			// [2, 1, 0]
 			initial: tokens{
 				{TokenID: 1, ProjectID: 0},
 				{TokenID: 2, ProjectID: 0},
 				{TokenID: 3, ProjectID: 1},
 			},
-			// [0, 0, 3]
+			// [1, 1, 1]
 			current: tokens{
-				{TokenID: 4, ProjectID: 2},
-				{TokenID: 5, ProjectID: 2},
+				// Although it's impossible to receive the same token ID back but
+				// with a different project ID, the scoring mechanism doesn't know
+				// about this. We include this to demonstrate the individual scoring
+				// elements.
+				{TokenID: 1, ProjectID: 19},
+				{TokenID: 3, ProjectID: 20},
 				{TokenID: 6, ProjectID: 2},
 			},
-			want: -9 - 0 - 0,
+			wantPenalties: [3]int{3, 0, 2},
+			want:          -3 - 0 - 2,
+		},
+		{
+			name: "duplicate projectIDs although different to original",
+			// [2, 1, 0]
+			initial: tokens{
+				{TokenID: 1, ProjectID: 0},
+				{TokenID: 2, ProjectID: 0},
+				{TokenID: 3, ProjectID: 1},
+				{TokenID: 4, ProjectID: 1},
+				{TokenID: 5, ProjectID: 1},
+				{TokenID: 6, ProjectID: 1},
+			},
+			// [0, 0, 3]
+			current: tokens{
+				{TokenID: 7, ProjectID: 2},
+				{TokenID: 8, ProjectID: 2},
+				{TokenID: 9, ProjectID: 2},
+				{TokenID: 10, ProjectID: 3},
+				{TokenID: 11, ProjectID: 3},
+				{TokenID: 12, ProjectID: 4},
+			},
+			wantPenalties: [3]int{3*3 + 2*2 + 1*1, 0, 0},
+			want:          -(9 + 4 + 1) - 0 - 0,
 		},
 		{
 			name: "mixed",
@@ -222,7 +277,8 @@ func TestScore(t *testing.T) {
 				{TokenID: 5, ProjectID: 0},
 				{TokenID: 6, ProjectID: 2},
 			},
-			want: -5 - 1 - 0,
+			wantPenalties: [3]int{2*2 + 1, 1 /*project 0 returned*/, 0},
+			want:          -(4 + 1) - 1 - 0,
 		},
 		{
 			name: "mixed",
@@ -238,7 +294,8 @@ func TestScore(t *testing.T) {
 				{TokenID: 2, ProjectID: 1},
 				{TokenID: 6, ProjectID: 2},
 			},
-			want: -3 - 3 - 1,
+			wantPenalties: [3]int{3, 3, 1},
+			want:          -3 - 3 - 1,
 		},
 		{
 			name: "pool",
@@ -255,7 +312,9 @@ func TestScore(t *testing.T) {
 				{TokenID: 6, ProjectID: 2},
 			},
 			isPool: true,
-			want:   -3,
+			// see scorePenalties for rationale of this constant pool score
+			wantPenalties: [3]int{3, 0, 0},
+			want:          -3,
 		},
 	}
 
@@ -266,7 +325,10 @@ func TestScore(t *testing.T) {
 			current.isPool = tt.isPool
 
 			if got := current.score(initial); got != tt.want {
-				t.Errorf("score(initial = %v, current = %v) = %v, want %v", initial, current, got, tt.want)
+				t.Errorf("%T(%v).score(initial = %v) = %v, want %v", current, tt.current, tt.initial, got, tt.want)
+			}
+			if got := current.scorePenalties(initial); !cmp.Equal(got, tt.wantPenalties) {
+				t.Errorf("%T(%v).scorePenalties(initial = %v) = %v, want %v", current, tt.current, tt.initial, got, tt.wantPenalties)
 			}
 		})
 	}
