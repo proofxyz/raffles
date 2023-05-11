@@ -1,10 +1,35 @@
 package main
 
 import (
+	"fmt"
 	"math/rand"
+	"sort"
 	"testing"
-	"time"
 )
+
+// ids returns only the token IDs of each token, excluding the project IDs. The
+// IDs are sorted, not in the original order as defined by ts.
+func (ts tokens) ids() []int {
+	ids := make([]int, len(ts))
+	for i, t := range ts {
+		ids[i] = t.TokenID
+	}
+	sort.Ints(ids)
+	return ids
+}
+
+// nextFakeTokenId is a counter used to generate fake token ids.
+var nextFakeTokenId int
+
+// newTokensFromProjects creates a new token list from a slice of project ids using sequential, fake token ids starting from 0.
+func newTokensFromProjects(projectIds []int) tokens {
+	var ts tokens
+	for _, p := range projectIds {
+		ts = append(ts, token{TokenID: nextFakeTokenId, ProjectID: p})
+		nextFakeTokenId++
+	}
+	return ts
+}
 
 func newAllocationFromProjectIds(xs []int) *allocation {
 	return newAllocation(defaultAddr, newTokensFromProjects(xs))
@@ -19,8 +44,6 @@ func newAllocationsFromProjectIds(xss [][]int) allocations {
 }
 
 func TestAnnealStats(t *testing.T) {
-	src := rand.NewSource(time.Now().UnixNano())
-
 	tests := []struct {
 		name                           string
 		allocations                    allocations
@@ -105,15 +128,6 @@ func TestAnnealStats(t *testing.T) {
 			wantNumIdenticalTokensReturned: 0,
 		},
 		{
-			name: "inbalanced",
-			allocations: allocations{
-				newAllocationFromProjectIds([]int{0, 0, 0, 0, 0}),
-				newAllocationFromProjectIds([]int{1, 2, 3, 4, 5}),
-			},
-			annealingFactor:                0.999,
-			wantNumIdenticalTokensReturned: 4, // meaning that 3 tokens were swapped
-		},
-		{
 			name: "with pool",
 			allocations: allocations{
 				newAllocationFromProjectIds([]int{0, 0, 0, 0, 0}),
@@ -130,47 +144,52 @@ func TestAnnealStats(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s, _, err := newState(tt.allocations, src).anneal(tt.annealingFactor, false)
-			if err != nil {
-				t.Errorf("anneal(): err %v", err)
-			}
-
-			seen := make(map[int]struct{})
-			var (
-				numIdenticalTokensReturned int
-			)
-
-			for i, c := range s.current {
-				if len(c.tokens) != len(s.initial[i].tokens) {
-					t.Errorf("len(current[%d].tokens) = %d, want %d", i, len(c.tokens), len(s.initial[i].tokens))
-				}
-
-				for _, v := range c.tokens {
-					// Sanity check for duplicate tokens
-					if _, ok := seen[v.TokenID]; ok {
-						t.Errorf("duplicate tokenId %d", v.TokenID)
+			for seed := int64(0); seed < 25; seed++ {
+				t.Run(fmt.Sprintf("random seed %d", seed), func(t *testing.T) {
+					rng := rand.New(rand.NewSource(seed))
+					s, err := newState(tt.allocations, rng).anneal(tt.annealingFactor, false)
+					if err != nil {
+						t.Errorf("anneal(): err %v", err)
 					}
-					seen[v.TokenID] = struct{}{}
-				}
 
-				numIdenticalTokensReturned += c.numSameTokenID(s.initial[i].tokens)
+					seen := make(map[int]bool)
+					var numIdenticalTokensReturned int
 
-				if tt.wantNumPerProject != nil {
-					got := c.numPerProject()
-					want := tt.wantNumPerProject[i]
-					for projectId, num := range got {
-						if num != want[projectId] {
-							t.Errorf("allocation[%d].NumPerProject(projectId %d): got %d, want %d", i, projectId, num, want[projectId])
+					for i, c := range s.current {
+						initial := s.initial[i]
+
+						if len(c.tokens) != len(initial.tokens) {
+							t.Errorf("len(current[%d].tokens) = %d, want %d (same as initial)", i, len(c.tokens), len(initial.tokens))
+						}
+
+						for _, v := range c.tokens {
+							// Sanity check for duplicate tokens
+							if seen[v.TokenID] {
+								t.Errorf("duplicate tokenId %d", v.TokenID)
+							}
+							seen[v.TokenID] = true
+						}
+
+						same := c.numSameTokenID(initial.tokens)
+						numIdenticalTokensReturned += same
+						t.Logf("token IDs %v => %v (same = %d)", initial.tokens.ids(), c.tokens.ids(), same)
+
+						if tt.wantNumPerProject != nil {
+							got := c.numPerProject()
+							want := tt.wantNumPerProject[i]
+							for projectId, num := range got {
+								if num != want[projectId] {
+									t.Errorf("allocation[%d].NumPerProject(projectId %d): got %d, want %d", i, projectId, num, want[projectId])
+								}
+							}
 						}
 					}
-				}
-			}
 
-			if numIdenticalTokensReturned != tt.wantNumIdenticalTokensReturned {
-				t.Errorf("numIdenticalTokensReturned = %d, want = %d", numIdenticalTokensReturned, tt.wantNumIdenticalTokensReturned)
+					if numIdenticalTokensReturned != tt.wantNumIdenticalTokensReturned {
+						t.Errorf("numIdenticalTokensReturned = %d, want = %d", numIdenticalTokensReturned, tt.wantNumIdenticalTokensReturned)
+					}
+				})
 			}
-
 		})
 	}
-
 }

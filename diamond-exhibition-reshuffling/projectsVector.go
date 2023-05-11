@@ -6,19 +6,19 @@ const numProjects = 21
 type projectsVector [numProjects]int
 
 // smul computes the scalar product of two vectors.
-func (a projectsVector) smul(b projectsVector) int {
+func (v projectsVector) smul(w projectsVector) int {
 	var res int
-	for i := range a {
-		res += a[i] * b[i]
+	for i := range v {
+		res += v[i] * w[i]
 	}
 	return res
 }
 
 // add computes the sum of two vectors.
-func (a projectsVector) add(b projectsVector) projectsVector {
+func (v projectsVector) add(w projectsVector) projectsVector {
 	var res projectsVector
-	for i := range a {
-		res[i] = a[i] + b[i]
+	for i := range v {
+		res[i] = v[i] + w[i]
 	}
 	return res
 }
@@ -32,10 +32,10 @@ func (v projectsVector) sum() int {
 	return s
 }
 
-// mask returns a vector with 1s in the positions where the original vector is non-zero
-func (a projectsVector) mask() projectsVector {
+// asMask returns a vector with 1s in the positions where the original vector is non-zero
+func (v projectsVector) asMask() projectsVector {
 	var res projectsVector
-	for i, x := range a {
+	for i, x := range v {
 		if x != 0 {
 			res[i] = 1
 		}
@@ -44,18 +44,18 @@ func (a projectsVector) mask() projectsVector {
 }
 
 // copy returns a copy of the vector.
-func (a projectsVector) copy() projectsVector {
-	var c projectsVector
-	copy(c[:], a[:])
-	return c
+func (v projectsVector) copy() projectsVector {
+	var cp projectsVector
+	copy(cp[:], v[:])
+	return cp
 }
 
 // normalised returns the vector normalised to sum to 1.
-func (a projectsVector) normalised() [numProjects]float64 {
-	sum := float64(a.sum())
+func (v projectsVector) normalised() [numProjects]float64 {
+	sum := float64(v.sum())
 
 	var res [numProjects]float64
-	for i, x := range a {
+	for i, x := range v {
 		res[i] = float64(x) / sum
 	}
 	return res
