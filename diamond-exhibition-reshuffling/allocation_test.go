@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -162,15 +163,27 @@ func TestSwapToken(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run("", func(t *testing.T) {
+			testCachedNumPerProject := func(t *testing.T, lbl string, a *allocation) {
+				t.Helper()
+				if diff := cmp.Diff(a.tokens.numPerProject(), a.numPerProject()); diff != "" {
+					t.Errorf("allocation %s numPerProject() cached value != tokens.numPerProject(); diff (-want +got): \n%s", lbl, diff)
+				}
+			}
+
+			testCachedNumPerProject(t, "a (before swap)", tt.a)
+			testCachedNumPerProject(t, "b (before swap)", tt.b)
+
 			tt.a.swapToken(tt.b, tt.ia, tt.ib)
 			cmpopt := cmp.AllowUnexported(allocation{})
 
-			if diff := cmp.Diff(tt.wantA, tt.a, cmpopt); diff != "" {
-				t.Errorf("allocation a mismatch after swapping: diff (+got -want) %v", diff)
-			}
-
-			if diff := cmp.Diff(tt.wantB, tt.b, cmpopt); diff != "" {
-				t.Errorf("allocation b mismatch after swapping: diff (+got -want) %v", diff)
+			for lbl, alloc := range map[string]struct{ afterSwap, want *allocation }{
+				"a": {afterSwap: tt.a, want: tt.wantA},
+				"b": {afterSwap: tt.b, want: tt.wantB},
+			} {
+				if diff := cmp.Diff(alloc.want, alloc.afterSwap, cmpopt); diff != "" {
+					t.Errorf("allocation %s mismatch after swapping: diff (+got -want) %v", lbl, diff)
+				}
+				testCachedNumPerProject(t, fmt.Sprintf("%s (after swap)", lbl), alloc.afterSwap)
 			}
 		})
 	}
