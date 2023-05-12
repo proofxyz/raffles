@@ -5,13 +5,14 @@ set -euo pipefail;
 function draw() {
     list="${1}"
     numToDraw="${2}"
-    echo -e "\n================================================================================\n"
-    echo -e "Drawing from ${list}\n"
+    >&2 echo -e "\n================================================================================\n"
+    >&2 echo -e "Drawing from ${list}\n"
+
     folder=$(dirname "${list}")
     entropy=$(cat "${folder}/entropy" | tail -n 1 | sed -n 's/^0x\([0-9a-fA-F]*\)$/\1/p')
 
     if [[ -z "${entropy}" ]]; then
-        echo "No entropy set. Skipping..."
+        >&2 echo "No entropy set. Skipping..."
         return
     fi 
 
@@ -25,5 +26,9 @@ draw external/run-ed-moonbirds-miami/participants 200
 draw grails/season-03/holder-snapshot-grail-8 1
 draw external/defybirds-pwc/participants 1535
 draw defybirds-unnested/participants 185
-draw beeple-nyc/participants $(< beeple-nyc/participants wc -l) # `wc -l` assumes a blank line at the end
+draw beeple-nyc/participants 0 # shuffle
 draw growth/participants 1000
+
+# First 39 distinct values after shuffling. The `uniq` command requires sorted
+# input values so isn't appropriate.
+draw diamond-exhibition-reshuffling/bonus-draw/participants 0 | awk '!seen[$0]++' | head -n 39
