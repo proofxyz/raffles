@@ -30,5 +30,7 @@ draw beeple-nyc/participants 0 # shuffle
 draw growth/participants 1000
 
 # First 39 distinct values after shuffling. The `uniq` command requires sorted
-# input values so isn't appropriate.
-draw diamond-exhibition-reshuffling/bonus-draw/participants 0 | awk '!seen[$0]++' | head -n 39
+# input values so isn't appropriate. Using `head` results in a SIGPIPE, which we
+# suppress with `:` as it always returns 0 (and has the added benefit of being
+# an emoji smile).
+draw diamond-exhibition-reshuffling/bonus-draw/participants 0 | (awk '!seen[$0]++' || :) | head -n 39
