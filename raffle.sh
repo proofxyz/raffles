@@ -34,3 +34,5 @@ draw growth/participants 1000
 # suppress with `:` as it always returns 0 (and has the added benefit of being
 # an emoji smile).
 draw diamond-exhibition-reshuffling/bonus-draw/participants 0 | (awk '!seen[$0]++' || :) | head -n 39
+
+draw toobins/jul-28/particpants 1
