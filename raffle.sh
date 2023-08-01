@@ -36,3 +36,4 @@ draw growth/participants 1000
 draw diamond-exhibition-reshuffling/bonus-draw/participants 0 | (awk '!seen[$0]++' || :) | head -n 39
 
 draw toobins/jul-28/particpants 1
+draw grails/season-04/diamond-nested-mb-holders 50
