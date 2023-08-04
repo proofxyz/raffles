@@ -39,3 +39,4 @@ draw toobins/jul-28/particpants 1
 (draw grails/season-04/diamond-nested-mb-holders 0 || :) | (awk '!seen[$0]++' || :) | head -n 25
 draw toobins/aug-03/participants 1
 draw grails/season-04-full-set/full-set-holders 10
+draw grails/season-04-patron/diamond-exhibition-patrons 3
