@@ -48,7 +48,9 @@ draw toobins/aug-03/participants 1
 draw grails/season-04-full-set/full-set-holders 10
 draw grails/season-04-patron/diamond-exhibition-patrons 3
 
-
+# Randomizing the Grails in Grails4 that staff members (8 in total) can mint.
+# Since some grails are already minted out, we draw a random shuffling of all
+# project IDs for each person and mint the first grail that is still available.
 for i in {1..9}; do
     draw grails/season-04-staff-mints/projectIDs 20 $i
 done
