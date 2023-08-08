@@ -16,6 +16,13 @@ function draw() {
         return
     fi 
 
+    if [ $# -ge 3 ]; then
+        >&2 echo "Folding entropy ${3} time"
+        for i in $(seq 1 "${3}"); do
+            entropy=$(echo "${entropy}"| sha256sum | cut -f 1 -d " ")
+        done
+    fi 
+
     cat "${list}" | ethier shuffle -e "${entropy}" -n "${numToDraw}"
 }
 
@@ -40,3 +47,10 @@ draw toobins/jul-28/particpants 1
 draw toobins/aug-03/participants 1
 draw grails/season-04-full-set/full-set-holders 10
 draw grails/season-04-patron/diamond-exhibition-patrons 3
+
+# Randomizing the projects in Grails 4 that staff members (8 in total) can mint.
+# Since some grails are already minted out, we draw a random shuffling of all
+# project IDs for each person and mint the first grail that is still available.
+for i in {1..9}; do
+    draw grails/season-04-staff-mints/projectIDs 20 $i
+done
