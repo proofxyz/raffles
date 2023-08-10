@@ -54,3 +54,5 @@ draw grails/season-04-patron/diamond-exhibition-patrons 3
 for i in {1..8}; do
     draw grails/season-04-staff-mints/projectIDs 20 $i
 done
+
+draw grails/season-04-remaining-artist-choice/projectIDs 20
