@@ -66,6 +66,7 @@ draw toobins/aug-10/participants 1
 draw toobins/aug-18/participants 1
 draw toobins/aug-24/participants 1
 draw toobins/sept-01/participants 1
+draw toobins/sept-11/participants 1
 
 draw grails/season-03-deafbeef-physical/cauldron 1
 draw grails/season-03-deafbeef-physical/bronze 1
