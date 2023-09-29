@@ -79,6 +79,4 @@ draw grails/season-03-deafbeef-physical/copperSwirl 1
 draw grails/season-03-deafbeef-physical/copper3 1
 draw grails/season-03-deafbeef-physical/gold 1
 
-draw every-30-days/participants 1
-draw every-30-days/participants 2
-draw every-30-days/participants 1
+draw every-30-days/participants 3
