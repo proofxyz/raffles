@@ -72,6 +72,7 @@ draw toobins/sept-21/participants 1
 draw toobins/sept-28/participants 1
 draw toobins/oct-05/participants 1
 draw toobins/oct-12/participants 1
+draw toobins/oct-19/participants 1
 
 draw grails/season-03-deafbeef-physical/cauldron 1
 draw grails/season-03-deafbeef-physical/bronze 1
@@ -82,3 +83,5 @@ draw grails/season-03-deafbeef-physical/copper3 1
 draw grails/season-03-deafbeef-physical/gold 1
 
 draw every-30-days/participants 3
+
+draw lunar-society/oct-19/participants 1
