@@ -14,14 +14,14 @@ function draw() {
     if [[ -z "${entropy}" ]]; then
         >&2 echo "No entropy set. Skipping..."
         return
-    fi 
+    fi
 
     if [ $# -ge 3 ]; then
         >&2 echo "Folding entropy ${3} time"
         for i in $(seq 1 "${3}"); do
             entropy=$(echo "${entropy}"| sha256sum | cut -f 1 -d " ")
         done
-    fi 
+    fi
 
     cat "${list}" | ethier shuffle -e "${entropy}" -n "${numToDraw}"
 }
@@ -89,3 +89,5 @@ draw every-30-days/participants 3
 draw lunar-society/oct-19/participants 1
 
 draw notes-from-a-neutron-star-exhibition/receive-transmission/receive-transmission-holders 3
+
+draw moonbirds/nov-06/participants 1
