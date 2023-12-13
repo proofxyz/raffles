@@ -94,3 +94,4 @@ draw lunar-society/oct-19/participants 1
 draw notes-from-a-neutron-star-exhibition/receive-transmission/receive-transmission-holders 3
 
 draw moonbirds/nov-06/participants 1
+draw grails/season-05/full-set-holders 10
