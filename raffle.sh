@@ -95,3 +95,7 @@ draw notes-from-a-neutron-star-exhibition/receive-transmission/receive-transmiss
 
 draw moonbirds/nov-06/participants 1
 draw grails/season-05/full-set-holders 10
+
+for i in {1..4}; do
+    draw grails/season-05-staff-mints/projectIDs 18 $i
+done
