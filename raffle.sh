@@ -96,3 +96,5 @@ draw notes-from-a-neutron-star-exhibition/receive-transmission/receive-transmiss
 
 draw moonbirds/nov-06/participants 1
 draw grails/season-05/full-set-holders 10
+
+draw grails/season-05-divergence-mint/projectIDs 18 $i
