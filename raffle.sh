@@ -97,10 +97,8 @@ draw notes-from-a-neutron-star-exhibition/receive-transmission/receive-transmiss
 draw moonbirds/nov-06/participants 1
 draw grails/season-05/full-set-holders 10
 
-<<<<<<< HEAD
+draw grails/season-05-divergence-mint/projectIDs 18 $i
+
 for i in {1..4}; do
     draw grails/season-05-staff-mints/projectIDs 18 $i
 done
-=======
-draw grails/season-05-divergence-mint/projectIDs 18 $i
->>>>>>> 228a55c1925ee276a7d487c86f5ee997ebf0052b
