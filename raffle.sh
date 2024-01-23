@@ -91,7 +91,7 @@ draw grails/season-03-deafbeef-physical/copperSwirl 1
 draw grails/season-03-deafbeef-physical/copper3 1
 draw grails/season-03-deafbeef-physical/gold 1
 
-draw talons/season-01/ledger-epiphany 1
+draw talons/season-01/ledger-epiphany/participants 1
 
 draw every-30-days/participants 3
 
