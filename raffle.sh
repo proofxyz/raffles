@@ -106,3 +106,5 @@ draw grails/season-05-divergence-mint/projectIDs 18 $i
 for i in {1..4}; do
     draw grails/season-05-staff-mints/projectIDs 18 $i
 done
+
+draw talons/talons-squiggle/raffle-entries 1
