@@ -108,3 +108,6 @@ for i in {1..4}; do
 done
 
 draw talons/talons-squiggle/raffle-entries 1
+
+draw talons/talons-squiggle-2/raffle-entries 1
+draw talons/talons-apecoin/raffle-entries 0 | (awk '!seen[$0]++' || :) | head -n 5
